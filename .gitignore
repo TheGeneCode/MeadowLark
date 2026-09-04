@@ -35,11 +35,15 @@ scripts/*
 # Track the yt-dlp channel checker -- test_ydl_player_client.py loads it from disk,
 # so CI's clean checkout needs it present or TestChannelChecker fails.
 !scripts/yt_dlp_channel.py
+# Track the social preview generator -- test_make_social_preview.py loads it from disk.
+!scripts/make_social_preview.py
 # Ignore docs/ contents (not the dir itself) so the screenshot below can be re-included --
 # a negation can't rescue a file whose parent dir is excluded outright.
 docs/*
 # Re-include the README's screenshot -- the rest of docs/ (planning notes) stays local-only.
 !docs/screenshot.png
+# Re-include the generated GitHub social preview card.
+!docs/social-preview.png
 vendor/bgutil-pot-provider/server/node_modules/
 # Re-include the vendored lockfile that the global "*.lock" rule would exclude;
 # `deno install --frozen` in scripts/setup_pot_provider.py needs it on a fresh checkout.
