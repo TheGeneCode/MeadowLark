@@ -329,6 +329,12 @@ APP_UPDATE_AUTO_CHECK: Final[bool] = (
 )
 MARK_WATCHED: Final[bool] = os.getenv("VID_DL_MARK_WATCHED", "false").lower() == "true"
 APP_UPDATE_LAST_CHECKED: Final[str] = os.getenv("VID_DL_APP_UPDATE_LAST_CHECKED", "")
+
+# Last geometry of the Podcast Status window, as the base64 form of Qt's
+# QWidget.saveGeometry() blob.  Machine-written (see src/window_geometry.py),
+# never edited by hand -- an unreadable value just falls back to the default size.
+PODCAST_STATUS_GEOMETRY_KEY: Final[str] = "VID_DL_PODCAST_STATUS_GEOMETRY"
+PODCAST_STATUS_GEOMETRY: Final[str] = os.getenv(PODCAST_STATUS_GEOMETRY_KEY, "")
 PODCAST_CHECK_INTERVAL_MINUTES: Final[int] = int(
     os.getenv("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES", "60"),
 )

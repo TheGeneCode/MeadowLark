@@ -42,6 +42,8 @@ from .config import (
     PODCAST_AUTO_CHECK,
     PODCAST_CHECK_INTERVAL_MINUTES,
     PODCAST_MISC_OUTPUT_DIR,
+    PODCAST_STATUS_GEOMETRY,
+    PODCAST_STATUS_GEOMETRY_KEY,
     VIDEO_STORAGE_DIR,
     button_label_for_height,
     drop_label_for_height,
@@ -182,6 +184,10 @@ def _init_runtime_settings() -> None:
             "VID_DL_APP_UPDATE_AUTO_CHECK": APP_UPDATE_AUTO_CHECK,
             "VID_DL_APP_UPDATE_LAST_CHECKED": APP_UPDATE_LAST_CHECKED,
             "VID_DL_MARK_WATCHED": MARK_WATCHED,
+            # Machine-written UI state, not exposed in the Settings dialog; it is
+            # registered here so a geometry saved on a previous run is visible to
+            # get_setting() and not just sitting unread in the AppData .env.
+            PODCAST_STATUS_GEOMETRY_KEY: PODCAST_STATUS_GEOMETRY,
         }
     )
     # Enabled set is stored as its string form (not a tuple) so it matches what

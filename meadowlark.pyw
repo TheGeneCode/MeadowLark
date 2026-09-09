@@ -103,6 +103,7 @@ from src.config import (
     PENDING_QUEUE_FILE,
     PLAYLISTS_AUDIO_FILE,
     PODCAST_AUTO_CHECK,
+    PODCAST_STATUS_GEOMETRY_KEY,
     VENV_SCRIPTS_DIR,
     VIDEO_STORAGE_DIR,
     YDL_COMMON_ERRORS,
@@ -169,6 +170,7 @@ from src.settings_dialog import (
     get_setting,
 )
 from src.url_utils import extract_playlist_id
+from src.window_geometry import GeometryMemoryDialog
 from src.ydl_options import (
     build_podcast_outtmpl,
     podcast_base_dir,
@@ -202,6 +204,11 @@ logger = logging.getLogger(__name__)
 MAX_INT_PROGRESS = 2147483647
 THREAD_QUIT_TIMEOUT_MS = 2000
 THREAD_TERMINATE_TIMEOUT_MS = 1000
+
+# First-run size of the Podcast Status window, matching the other list dialogs
+# (history, pending, failed). After that the window reopens at whatever size it
+# was closed at -- see src/window_geometry.py.
+_PODCAST_STATUS_DEFAULT_SIZE = (900, 500)
 
 # Resolution tiles wrap after this many columns. Three keeps the default
 # (1080 + 720 + audio) window exactly as wide as it is today.
@@ -1426,8 +1433,16 @@ class MyWindow(QWidget):
                 )
             return
 
-        dialog = QDialog(self)
+        dialog = GeometryMemoryDialog(
+            self,
+            PODCAST_STATUS_GEOMETRY_KEY,
+            _PODCAST_STATUS_DEFAULT_SIZE,
+        )
         dialog.setWindowTitle("Podcast Status")
+        # Destroy on close rather than hide: the reuse check above is a visibility
+        # test, so a merely-hidden dialog would be rebuilt on every reopen while the
+        # old one lived on as a child of this window until app teardown.
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         layout = QVBoxLayout()
 
         if not self._podcast_last_statuses:
@@ -1623,6 +1638,7 @@ class MyWindow(QWidget):
             return
 
         dialog = HistoryDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(self._on_history_dialog_destroyed)
         dialog.show()
         self._history_dialog = dialog
@@ -2147,9 +2163,28 @@ class MyWindow(QWidget):
             self._podcast_worker = None
             self._podcast_worker_thread = None
 
+    def _save_open_dialog_geometry(self) -> None:
+        """
+        Record the Podcast Status window's geometry when the app quits with it open.
+
+        Qt tears a child dialog down without routing it through close()/done() on
+        this path, so the dialog's own dismissal-time save never runs and the size
+        the user left it at would be lost.
+        """
+        dialog = getattr(self, "_podcast_status_dialog", None)
+        if dialog is None:
+            return
+        try:
+            if dialog.isVisible():
+                dialog.save_geometry()
+        except RuntimeError as e:
+            # The dialog's C++ object is already gone; nothing left to measure.
+            utils.log_exception(e, "Failed to save Podcast Status window geometry")
+
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         """Ensure background podcast checks are stopped when the window closes."""
         try:
+            self._save_open_dialog_geometry()
             self._shutdown_podcast_thread()
         finally:
             super().closeEvent(event)
@@ -2201,8 +2236,11 @@ class MyWindow(QWidget):
         """Open (or raise) the Settings dialog."""
         if self._settings_dialog is None:
             self._settings_dialog = SettingsDialog(self)
+            self._settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             self._settings_dialog.settings_changed.connect(self.reload_settings)
-            self._settings_dialog.finished.connect(
+            # destroyed, not finished: finished only clears the reference, which would
+            # leave the closed dialog alive as a hidden child of this window.
+            self._settings_dialog.destroyed.connect(
                 lambda: setattr(self, "_settings_dialog", None)
             )
         self._settings_dialog.show()
