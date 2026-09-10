@@ -48,6 +48,7 @@ def extract_video_entries(
     url: str,
     extract_flat: bool | str = True,
     ydl_class: type | None = None,
+    cookiefile: str | None = None,
 ) -> list:
     """
     Extract entries from URL (playlist or video).
@@ -59,6 +60,8 @@ def extract_video_entries(
         url: The URL to extract entries from.
         extract_flat: Whether to extract flat info (True) or full info (False).
         ydl_class: Optional custom YoutubeDL class for injection.
+        cookiefile: Optional cookies file path, so private/unlisted playlists
+            enumerate their entries instead of coming back empty.
 
     Returns:
         List of entry dictionaries.
@@ -70,6 +73,8 @@ def extract_video_entries(
         **_QUIET_YDL_OPTS,
         "extract_flat": extract_flat,
     }
+    if cookiefile:
+        opts["cookiefile"] = str(cookiefile)
     with ydl_class(opts) as ydl:
         info = ydl.extract_info(url, download=False)
         return info.get("entries", [info])

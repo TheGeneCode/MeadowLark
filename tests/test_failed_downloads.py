@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QApplication
 
 from QYT import QYTQueue
 from src.failed_downloads import (
+    ErrorCapturingLogger,
     FailureHook,
     add_failed_download,
     load_failed_downloads,
@@ -521,3 +522,226 @@ def test_run_crash_path_non_dict_item_meta_falls_back_to_empty() -> None:
     assert captured[0]["title"] == "https://example.com/v"
     assert captured[0]["key"] == "https://example.com/v"
     assert captured[0]["source"] == "unknown"
+
+
+# --- Extraction-stage failures (playlist entries that never start downloading) ---
+#
+# Under ignoreerrors="only_download" a dead playlist entry is skipped and the run
+# continues, so nothing raises and no progress hook fires. The yt-dlp ERROR line
+# is the only evidence, and it must still reach Failed Downloads.
+
+_UNAVAILABLE_LINE = (
+    "ERROR: [youtube] JsxNJgm7VXA: Video unavailable. "
+    "This video is no longer available because the uploader has closed their account."
+)
+
+
+def _hook_with_capture() -> tuple[FailureHook, list[dict]]:
+    captured: list[dict] = []
+    return FailureHook(_META, captured.append), captured
+
+
+def test_log_error_line_becomes_a_failed_record() -> None:
+    hook, captured = _hook_with_capture()
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook.flush()
+
+    assert len(captured) == 1
+    assert captured[0]["urls"] == ["https://www.youtube.com/watch?v=JsxNJgm7VXA"]
+    assert captured[0]["error"].startswith("Video unavailable.")
+    assert captured[0]["source"] == "1080"
+
+
+def test_log_error_line_does_not_overwrite_a_progress_hook_failure() -> None:
+    """The richer progress-hook record wins; the same video is reported once."""
+    hook, captured = _hook_with_capture()
+    hook(
+        {
+            "status": "error",
+            "info_dict": {
+                "id": "JsxNJgm7VXA",
+                "title": "Real Title",
+                "webpage_url": "https://youtu.be/JsxNJgm7VXA",
+            },
+        },
+    )
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook.flush()
+
+    assert len(captured) == 1
+    assert captured[0]["title"] == "Real Title"
+
+
+def test_log_error_line_is_discarded_when_the_video_later_finishes() -> None:
+    """A fallback that succeeds must not leave the video filed as failed."""
+    hook, captured = _hook_with_capture()
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook({"status": "finished", "info_dict": {"id": "JsxNJgm7VXA"}})
+    hook.flush()
+
+    assert captured == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+        "ERROR: Requested format is not available",
+        "[download] Destination: C:/vid/some video.mp4",
+        "",
+    ],
+)
+def test_non_entry_error_lines_are_ignored(line: str) -> None:
+    """Run-level errors abort the run and are filed by the caller, not here."""
+    hook, captured = _hook_with_capture()
+    hook.record_log_error(line)
+    hook.flush()
+
+    assert captured == []
+
+
+def test_non_youtube_extractor_keeps_the_bare_id_rather_than_inventing_a_url() -> None:
+    hook, captured = _hook_with_capture()
+    hook.record_log_error("ERROR: [nebula] some-slug: Video unavailable")
+    hook.flush()
+
+    assert captured[0]["urls"] == ["some-slug"]
+
+
+def test_extractor_tag_with_colon_is_not_mistaken_for_youtube() -> None:
+    """A tab/playlist-level extractor (e.g. youtube:tab) must not build a watch URL."""
+    hook, captured = _hook_with_capture()
+    hook.record_log_error("ERROR: [youtube:tab] PLxxxxxxxxxxxxxxxx: This playlist does not exist")
+    hook.flush()
+
+    assert captured[0]["urls"] == ["PLxxxxxxxxxxxxxxxx"]
+
+
+def test_video_id_with_underscore_is_captured_and_builds_a_watch_url() -> None:
+    """Real YouTube ids may contain underscores as well as hyphens."""
+    hook, captured = _hook_with_capture()
+    hook.record_log_error("ERROR: [youtube] a_B-9_XyzQw: Video unavailable")
+    hook.flush()
+
+    assert captured[0]["urls"] == ["https://www.youtube.com/watch?v=a_B-9_XyzQw"]
+
+
+def test_log_error_line_is_discarded_after_merger_postprocessing() -> None:
+    """A fallback that succeeds must discard a log-captured failure too, not just a progress one."""
+    hook, captured = _hook_with_capture()
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook(
+        {
+            "status": "postprocessing",
+            "postprocessor": "Merger",
+            "info_dict": {"id": "JsxNJgm7VXA"},
+        },
+    )
+    hook.flush()
+
+    assert captured == []
+
+
+def test_error_capturing_logger_tees_and_delegates() -> None:
+    inner = MagicMock()
+    recorded: list[str] = []
+    logger = ErrorCapturingLogger(inner, recorded.append)
+
+    logger.error(_UNAVAILABLE_LINE)
+    logger.warning("just a warning")
+    logger.debug("[download] 5%")
+
+    assert recorded == [_UNAVAILABLE_LINE]
+    inner.error.assert_called_once_with(_UNAVAILABLE_LINE)
+    inner.warning.assert_called_once_with("just a warning")
+    inner.debug.assert_called_once_with("[download] 5%")
+
+
+def test_error_capturing_logger_still_logs_when_capture_raises() -> None:
+    """Capturing a failure must never be the reason a download stops."""
+    inner = MagicMock()
+    logger = ErrorCapturingLogger(inner, MagicMock(side_effect=TypeError("boom")))
+
+    logger.error("ERROR: something")
+
+    inner.error.assert_called_once_with("ERROR: something")
+
+
+def _run_download_capturing_logger(
+    monkeypatch: pytest.MonkeyPatch,
+    options: dict,
+    error_line: str | None = None,
+) -> tuple[list, list[dict], dict]:
+    """Drive QYTQueue.download, recording the logger yt-dlp would have been handed."""
+    queue_obj = QYTQueue(Queue())
+    seen_loggers: list = []
+
+    def _execute(_urls: list, opts: dict) -> tuple[bool, str]:
+        logger = opts.get("logger")
+        seen_loggers.append(logger)
+        if error_line is not None and logger is not None:
+            logger.error(error_line)
+        return True, ""
+
+    monkeypatch.setattr(queue_obj.executor, "execute", _execute)
+    monkeypatch.setattr(queue_obj.executor, "_extract_title", lambda _u: "T")
+    captured: list[dict] = []
+    queue_obj.download_failed.connect(captured.append)
+
+    queue_obj.download(["u"], options)
+    return seen_loggers, captured, options
+
+
+def test_playlist_run_files_an_unavailable_entry_without_aborting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    The reported bug, end to end at the wiring layer.
+
+    A playlist run carries ignoreerrors="only_download", so an unavailable entry
+    is skipped rather than raised. The run still reports success, and the entry
+    still lands in Failed Downloads.
+    """
+    inner_logger = MagicMock()
+    options = {
+        "qmeta": _META,
+        "logger": inner_logger,
+        "ignoreerrors": "only_download",
+    }
+    seen, captured, options = _run_download_capturing_logger(
+        monkeypatch, options, error_line=_UNAVAILABLE_LINE
+    )
+
+    assert isinstance(seen[0], ErrorCapturingLogger)
+    assert len(captured) == 1
+    assert captured[0]["urls"] == ["https://www.youtube.com/watch?v=JsxNJgm7VXA"]
+    # The wrapper is transient: later code reads options["logger"] expecting the
+    # real QLogger (to reconnect its message_changed signal).
+    assert options["logger"] is inner_logger
+    inner_logger.error.assert_called_once_with(_UNAVAILABLE_LINE)
+
+
+def test_single_video_run_is_not_wrapped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without ignoreerrors the error aborts and the caller files it; no double filing."""
+    inner_logger = MagicMock()
+    seen, _captured, _options = _run_download_capturing_logger(
+        monkeypatch, {"qmeta": _META, "logger": inner_logger}
+    )
+
+    assert seen[0] is inner_logger
+
+
+def test_logger_is_restored_even_when_execute_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inner_logger = MagicMock()
+    queue_obj = QYTQueue(Queue())
+    monkeypatch.setattr(
+        queue_obj.executor, "execute", MagicMock(side_effect=RuntimeError("boom"))
+    )
+    options = {"qmeta": _META, "logger": inner_logger, "ignoreerrors": "only_download"}
+
+    with pytest.raises(RuntimeError):
+        queue_obj.download(["u"], options)
+
+    assert options["logger"] is inner_logger

@@ -176,7 +176,7 @@ from src.ydl_options import (
     podcast_base_dir,
     resolve_cookiefile,
 )
-from src.ydl_utils import extract_playlist_info
+from src.ydl_utils import extract_playlist_info, extract_video_entries
 from UIClasses import DropLabel, PlaylistButton, PlaylistDialog
 
 logger = logging.getLogger(__name__)
@@ -689,25 +689,44 @@ class MyWindow(QWidget):
                 self._podcast_check_running = False
                 self._set_podcast_indicator("error")
 
-    def _handle_playlist_dialog(self, urls: list, source: str) -> dict | None:
-        """Handle playlist dialog for individual playlists, return playlist_items or None to cancel."""
+    def _handle_playlist_dialog(
+        self, urls: list, source: str
+    ) -> tuple[dict, str] | None:
+        """
+        Handle the range dialog for an individual playlist dropped on a non-playlist target.
+
+        Returns ``(properties, source)``, or ``None`` if the user cancelled. The
+        returned source is the caller's: accepting the dialog turns the request
+        into a playlist run, which must resolve the ``...playlists`` source
+        options -- ``ignoreerrors="only_download"`` so one dead entry does not
+        abort the remaining ones, plus the per-playlist output template. Merely
+        rebinding the *source* parameter here would be discarded on return.
+        """
         if "list=" in urls[0] and "playlist" not in source:
-            with yt_dlp.YoutubeDL({"extract_flat": "in_playlist"}) as ydl:
-                info = ydl.extract_info(urls[0], download=False)
-                playlist_count = info["playlist_count"]
-                dialog = PlaylistDialog(playlist_count)
-                if dialog.exec():
-                    playlist_input = dialog.get_playlist_input()
-                    # a blank return will set no option so default to downloading whole playlist
-                    properties = {}
-                    if playlist_input:
-                        properties["playlist_items"] = playlist_input
-                    if source != "audio":
-                        source += "playlists"
-                    return properties
-                # will cancel playlist download
-                return None
-        return {}
+            # extract_playlist_info rather than a bare YoutubeDL: it carries the
+            # shared PO-token/JS-runtime wiring every extraction needs, and the
+            # cookies a private or unlisted playlist needs to report a count at all.
+            info = extract_playlist_info(
+                urls[0],
+                extra_opts={
+                    "extract_flat": "in_playlist",
+                    "cookiefile": resolve_cookiefile(),
+                },
+            )
+            playlist_count = info["playlist_count"]
+            dialog = PlaylistDialog(playlist_count)
+            if dialog.exec():
+                playlist_input = dialog.get_playlist_input()
+                # a blank return will set no option so default to downloading whole playlist
+                properties = {}
+                if playlist_input:
+                    properties["playlist_items"] = playlist_input
+                if source != "audio":
+                    source += "playlists"
+                return properties, source
+            # will cancel playlist download
+            return None
+        return {}, source
 
     def playlist_button_clicked(self, source: str) -> None:
         """
@@ -796,20 +815,22 @@ class MyWindow(QWidget):
         # Read existing IDs using centralized function
         existing_ids = load_downloaded_video_ids(str(archive_path))
         for url in urls:
-            # Use extract_flat="in_playlist" for playlists, True for single videos
-            ydl_opts = {
-                "extract_flat": "in_playlist" if "lists" in source else True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                entries = info.get("entries", [info])
-                with archive_path.open("a", encoding="utf-8") as archive:
-                    for entry in entries:
-                        video_id = entry.get("id")
-                        if video_id and video_id not in existing_ids:
-                            archive.write(f"youtube {video_id}\n")
-                            total_added += 1
-                            qlogger.debug("Added to archive: youtube %(video_id)s")
+            # Use extract_flat="in_playlist" for playlists, True for single videos.
+            # extract_video_entries rather than a bare YoutubeDL: it carries the
+            # shared PO-token/JS-runtime wiring, and without cookies a private or
+            # unlisted playlist enumerates nothing and silently archives nothing.
+            entries = extract_video_entries(
+                url,
+                extract_flat="in_playlist" if "lists" in source else True,
+                cookiefile=resolve_cookiefile(),
+            )
+            with archive_path.open("a", encoding="utf-8") as archive:
+                for entry in entries:
+                    video_id = entry.get("id")
+                    if video_id and video_id not in existing_ids:
+                        archive.write(f"youtube {video_id}\n")
+                        total_added += 1
+                        qlogger.debug("Added to archive: youtube %(video_id)s")
         self.labelOutput.setText("IDs added to archive.")
         self.barProgress.setRange(0, 1)
         self.barProgress.setValue(1)
@@ -859,10 +880,14 @@ class MyWindow(QWidget):
         urls = [url.split("&list=WL")[0] for url in urls]
 
         if not skip_playlist_dialog:
-            # Handle individual playlist dialog
-            playlist_props = self._handle_playlist_dialog(urls, source)
-            if playlist_props is None:
+            # Handle individual playlist dialog. Accepting it promotes the source
+            # to its playlist variant, which is what makes get_source_options
+            # below hand back the playlist options rather than the single-video
+            # ones -- see _handle_playlist_dialog.
+            dialog_result = self._handle_playlist_dialog(urls, source)
+            if dialog_result is None:
                 return None  # cancelled
+            playlist_props, source = dialog_result
             properties.update(playlist_props)
 
         # Get source-specific options

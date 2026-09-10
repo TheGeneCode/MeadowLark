@@ -23,7 +23,11 @@ from src.config import (  # noqa: E402
     LOGFILE_MIGRATION_ENABLED,
 )
 from src.download_executor import DownloadExecutor  # noqa: E402
-from src.failed_downloads import FailureHook, make_failed_record  # noqa: E402
+from src.failed_downloads import (  # noqa: E402
+    ErrorCapturingLogger,
+    FailureHook,
+    make_failed_record,
+)
 from src.logging_utils import (  # noqa: E402
     get_local_timestamp,
     get_ytdlp_debug_logger,
@@ -533,8 +537,28 @@ class QYTQueue(QThread):
             progress_hooks.append(failure_hook)
             options["progress_hooks"] = progress_hooks
 
+            # An entry that dies during *extraction* (unavailable, private,
+            # removed) never reaches the progress hooks, so under
+            # ignoreerrors="only_download" -- where the run correctly carries on to
+            # the next entry -- its ERROR line through the logger is the only
+            # signal it failed. Without ignoreerrors the error aborts the run and
+            # the `if not success` path below files it, so wrapping there would
+            # only file the same video twice under two keys.
+            base_logger = options.get("logger")
+            capture_extraction_errors = bool(options.get("ignoreerrors")) and (
+                base_logger is not None
+            )
+            if capture_extraction_errors:
+                options["logger"] = ErrorCapturingLogger(
+                    base_logger, failure_hook.record_log_error
+                )
+
             # Delegate download to executor
-            success, error_message = self.executor.execute(urls, options)
+            try:
+                success, error_message = self.executor.execute(urls, options)
+            finally:
+                if capture_extraction_errors:
+                    options["logger"] = base_logger
 
             if not success:
                 # Log the error if download failed
