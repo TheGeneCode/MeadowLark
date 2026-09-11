@@ -15,7 +15,8 @@ from src.failed_downloads import (
     add_failed_download,
     load_failed_downloads,
     make_failed_record,
-    remove_failed_download,
+    record_video_id,
+    remove_failed_downloads,
     save_failed_downloads,
 )
 
@@ -62,7 +63,7 @@ def test_add_dedupes_by_key_newest_first(store: Path) -> None:
 def test_remove_missing_key_noop(store: Path) -> None:
     add_failed_download(store, make_failed_record(["u1"], _META, "T", "boom"))
 
-    remove_failed_download(store, "nope")
+    remove_failed_downloads(store, ["nope"])
 
     assert [r["key"] for r in load_failed_downloads(store)] == ["u1"]
 
@@ -70,9 +71,65 @@ def test_remove_missing_key_noop(store: Path) -> None:
 def test_remove_existing_key(store: Path) -> None:
     add_failed_download(store, make_failed_record(["u1"], _META, "T", "boom"))
 
-    remove_failed_download(store, "u1")
+    remove_failed_downloads(store, ["u1"])
 
     assert load_failed_downloads(store) == []
+
+
+def test_remove_many_drops_all_given_keys(store: Path) -> None:
+    add_failed_download(store, make_failed_record(["u1"], _META, "T1", "e"))
+    add_failed_download(store, make_failed_record(["u2"], _META, "T2", "e"))
+    add_failed_download(store, make_failed_record(["u3"], _META, "T3", "e"))
+
+    remove_failed_downloads(store, ["u1", "u3"])
+
+    assert [r["key"] for r in load_failed_downloads(store)] == ["u2"]
+
+
+def test_remove_many_no_match_skips_write(store: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    add_failed_download(store, make_failed_record(["u1"], _META, "T", "e"))
+    mock_save = MagicMock()
+    monkeypatch.setattr("src.failed_downloads.save_failed_downloads", mock_save)
+
+    result = remove_failed_downloads(store, ["nope"])
+
+    assert len(result) == 1
+    mock_save.assert_not_called()
+
+
+def test_remove_many_tolerates_non_string_stored_key(store: Path) -> None:
+    store.write_text(
+        json.dumps(
+            [
+                {"key": ["x"], "urls": ["u"], "source": "1080"},
+                {"key": "u1", "urls": ["u"], "source": "1080"},
+            ],
+        ),
+        encoding="utf-8",
+    )
+
+    result = remove_failed_downloads(store, ["u1"])
+
+    assert any(r.get("key") == ["x"] for r in result)
+    assert not any(r.get("key") == "u1" for r in result)
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [
+        (make_failed_record(["https://www.youtube.com/watch?v=abc123"], _META, "T", "e"), "abc123"),
+        (make_failed_record(["https://youtu.be/abc123"], _META, "T", "e"), "abc123"),
+        (make_failed_record(["https://www.youtube.com/playlist?list=PLx"], _META, "T", "e"), None),
+        ({"urls": "not-a-list"}, None),
+        ({"urls": []}, None),
+        ({"urls": [None]}, None),
+        ({"urls": [123]}, None),
+        ({}, None),
+        (None, None),
+    ],
+)
+def test_record_video_id(record: dict | None, expected: str | None) -> None:
+    assert record_video_id(record) == expected
 
 
 def test_make_failed_record_empty_urls() -> None:
@@ -273,8 +330,7 @@ def test_add_falsy_key_record_vanishes_on_reload(store: Path) -> None:
 def test_remove_with_falsy_key_is_noop(store: Path) -> None:
     add_failed_download(store, make_failed_record(["u1"], _META, "T", "e"))
 
-    remove_failed_download(store, "")
-    remove_failed_download(store, None)  # type: ignore[arg-type]
+    remove_failed_downloads(store, ["", None])  # type: ignore[list-item]
 
     assert [r["key"] for r in load_failed_downloads(store)] == ["u1"]
 

@@ -114,7 +114,8 @@ from src.config import (
 from src.failed_downloads import (
     add_failed_download,
     load_failed_downloads,
-    remove_failed_download,
+    record_video_id,
+    remove_failed_downloads,
 )
 from src.failed_downloads_dialog import FailedDownloadsDialog
 from src.first_run_wizard import FirstRunWizard, needs_first_run
@@ -169,7 +170,7 @@ from src.settings_dialog import (
     enabled_heights,
     get_setting,
 )
-from src.url_utils import extract_playlist_id, extract_video_id
+from src.url_utils import extract_playlist_id
 from src.window_geometry import GeometryMemoryDialog
 from src.ydl_options import (
     build_podcast_outtmpl,
@@ -1548,7 +1549,7 @@ class MyWindow(QWidget):
         url = record.get("url")
         if not url:
             return
-        # Remove-first mirrors _retry_failed_download: if it is still unreleased the
+        # Remove-first mirrors _retry_failed_downloads: if it is still unreleased the
         # failure path re-parks it with a fresh release time, and a success leaves the
         # pending list clean.
         self._remove_pending_download(url)
@@ -1627,9 +1628,9 @@ class MyWindow(QWidget):
         dialog = FailedDownloadsDialog(
             load_failed_downloads(FAILED_DOWNLOADS_FILE), self
         )
-        dialog.retry_requested.connect(self._retry_failed_download)
+        dialog.retry_requested.connect(self._retry_failed_downloads)
         dialog.mark_downloaded_requested.connect(self._mark_failed_downloaded)
-        dialog.delete_requested.connect(self._delete_failed_download)
+        dialog.delete_requested.connect(self._delete_failed_downloads)
         dialog.destroyed.connect(self._on_failed_dialog_destroyed)
         dialog.show()
         self._failed_dialog = dialog
@@ -1637,45 +1638,57 @@ class MyWindow(QWidget):
     def _on_failed_dialog_destroyed(self) -> None:
         self._failed_dialog = None
 
-    def _delete_failed_download(self, key: str) -> None:
-        """Drop a record from the store and refresh the button and dialog."""
-        records = remove_failed_download(FAILED_DOWNLOADS_FILE, key)
+    def _delete_failed_downloads(self, keys: list[str]) -> None:
+        """Drop records from the store in one write and refresh the button and dialog."""
+        records = remove_failed_downloads(FAILED_DOWNLOADS_FILE, keys)
         self._refresh_failed_button()
         if self._failed_dialog is not None:
             self._failed_dialog.set_records(records)
 
-    def _retry_failed_download(self, record: dict) -> None:
-        """Re-queue a failed download through the normal download pipeline."""
+    def _retry_failed_downloads(self, records: list[dict]) -> None:
+        """Re-queue failed downloads through the normal download pipeline."""
+        # request_detected treats an empty url list as "run this source's whole
+        # playlist file", so a malformed record must never reach it.
+        runnable = [
+            r
+            for r in records
+            if isinstance(r.get("urls"), list) and r["urls"] and isinstance(r.get("source"), str)
+        ]
+        if not runnable:
+            return
         # Remove-first is deliberate: a repeat failure re-adds the record with a
         # fresh timestamp via download_failed; a success leaves the list clean.
-        self._delete_failed_download(record["key"])
-        self.handle_log_entry(f"Retrying failed download: {record['title']}")
-        self.request_detected(list(record["urls"]), record["source"])
+        self._delete_failed_downloads([r.get("key") for r in runnable])
+        for record in runnable:
+            self.handle_log_entry(
+                f"Retrying failed download: {record.get('title') or record['urls'][0]}"
+            )
+            self.request_detected(list(record["urls"]), record["source"])
 
-    def _mark_failed_downloaded(self, record: dict) -> None:
+    def _mark_failed_downloaded(self, records: list[dict]) -> None:
         """
-        Add a failed video's ID to the archive and drop it from the failed list.
+        Add each failed video's ID to the archive and drop those records from the list.
 
         Writing to the same archive yt-dlp's download_archive option checks is
         what keeps a permanently-broken (private/deleted) playlist entry from
         being re-reported as failed on every future playlist scan.
         """
-        urls = record.get("urls") or []
-        video_id = extract_video_id(urls[0]) if urls else None
-        if not video_id:
+        marked = [(r, vid) for r in records if (vid := record_video_id(r)) is not None]
+        if not marked:
             return
         try:
             existing_ids = load_downloaded_video_ids(str(ARCHIVE_PATH))
-            if video_id not in existing_ids:
+            # dict.fromkeys dedupes in order: two records can share one video id.
+            new_ids = list(dict.fromkeys(vid for _, vid in marked if vid not in existing_ids))
+            if new_ids:
                 with ARCHIVE_PATH.open("a", encoding="utf-8") as archive:
-                    archive.write(f"youtube {video_id}\n")
+                    archive.writelines(f"youtube {vid}\n" for vid in new_ids)
         except OSError as exc:
-            utils.log_exception(
-                exc, "Failed to add video to archive from Failed Downloads"
-            )
+            utils.log_exception(exc, "Failed to add videos to archive from Failed Downloads")
             return
-        self._delete_failed_download(record.get("key"))
-        self.handle_log_entry(f"Marked as downloaded: {record.get('title') or video_id}")
+        self._delete_failed_downloads([r.get("key") for r, _ in marked])
+        for record, vid in marked:
+            self.handle_log_entry(f"Marked as downloaded: {record.get('title') or vid}")
 
     def _show_history(self) -> None:
         """Open a non-blocking dialog showing download history (Ctrl+H)."""

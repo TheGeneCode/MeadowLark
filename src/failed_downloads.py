@@ -2,13 +2,14 @@
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 from yt_dlp.extractor.youtube import YoutubePlaylistIE
 
 from .logging_utils import get_local_timestamp, log_exception
+from .url_utils import extract_video_id
 
 FailedRecord = dict  # keys: key, urls, source, site, title, failed_at, error
 
@@ -95,11 +96,36 @@ def add_failed_download(path: Path, record: FailedRecord) -> list[FailedRecord]:
     return records
 
 
-def remove_failed_download(path: Path, key: str) -> list[FailedRecord]:
-    """Remove the record with the given key; a missing key is a no-op."""
-    records = [r for r in load_failed_downloads(path) if r.get("key") != key]
-    save_failed_downloads(path, records)
-    return records
+def remove_failed_downloads(path: Path, keys: Iterable[str]) -> list[FailedRecord]:
+    """Remove every record whose key is in *keys* in one write; unknown or falsy keys are ignored."""
+    drop = {key for key in keys if isinstance(key, str) and key}
+    records = load_failed_downloads(path)
+    # A hand-edited store can hold a non-string key (e.g. a list); testing it for
+    # set membership raises TypeError, and an exception escaping a Qt slot aborts
+    # the interpreter - so only string keys are ever looked up.
+    kept = [r for r in records if not (isinstance(r.get("key"), str) and r["key"] in drop)]
+    if len(kept) != len(records):
+        save_failed_downloads(path, kept)
+    return kept
+
+
+def record_video_id(record: FailedRecord | None) -> str | None:
+    """
+    Return the YouTube video id of a record's first URL, or None.
+
+    Gate on the URL resolving to a video id, not on record["site"]: a
+    playlist-sourced failure's site is detected from the *playlist file's*
+    raw entries (see detect_site_from_urls), which for a bare-playlist-id
+    file (e.g. 720playlists.txt) comes back "unknown" even though the
+    failed entry's own urls[0] is a real youtube.com watch URL. The video
+    id -- what the archive actually keys on -- only needs that URL.
+    """
+    if not record:
+        return None
+    urls = record.get("urls")
+    if not isinstance(urls, list) or not urls or not isinstance(urls[0], str):
+        return None
+    return extract_video_id(urls[0])
 
 
 def make_failed_record(

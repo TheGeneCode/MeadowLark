@@ -252,11 +252,12 @@ When a download fails, MeadowLark records it instead of letting it scroll past i
 
 Click it to open the **Failed Downloads** window, a list of every failed item with the time it failed, the site, the download type (the resolution preset, audio, or playlist), and the title. Hover any row to see the error message that caused the failure.
 
-Select a row and use:
+Select one or more rows (Ctrl-click, Shift-click, or Ctrl+A for all) and use — each action applies to every selected row, skipping any it can't handle:
 
 - **Retry** — re-queues the download exactly as if you had dropped the URL again. Already-completed entries of a playlist are skipped via the archive, so only the failed parts download. If it fails a second time, it reappears in the list with a fresh timestamp.
+- **Mark as Downloaded** — adds a YouTube video to the download archive so playlist scans stop retrying it (e.g. a private or deleted video), and removes it from the list.
 - **Delete** — removes the item from the list without downloading it.
-- **Right-click → Open in Browser** — opens the original URL so you can check whether the video still exists.
+- **Right-click → Open in Browser** — opens each selected item's original URL so you can check whether the video still exists.
 
 Retry is disabled for any record whose download type can no longer be recognised (for example, a record written by an older version); Delete still works on those.
 
