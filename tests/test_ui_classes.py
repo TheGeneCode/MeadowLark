@@ -33,6 +33,19 @@ class TestPlaylistDialog:
         dialog.playlistInput.setText("1,3,5-7")
         assert dialog.get_playlist_input() == "1,3,5-7"
 
+    def test_get_playlist_input_strips_interior_whitespace(self) -> None:
+        """
+        A naturally-typed selector with spaces must reach yt-dlp whitespace-free.
+
+        yt-dlp's playlist_items parser fullmatches each comma-separated segment
+        against a regex with zero whitespace tolerance, so "1-3, 5 - 10" (a
+        perfectly readable selector) would otherwise raise ValueError deep in
+        yt-dlp's option validation.
+        """
+        dialog = PlaylistDialog(10)
+        dialog.playlistInput.setText("1-3, 5 - 10")
+        assert dialog.get_playlist_input() == "1-3,5-10"
+
     def test_drag_enter_event_with_urls(self) -> None:
         """Test dragEnterEvent accepts URLs."""
         dialog = PlaylistDialog(10)

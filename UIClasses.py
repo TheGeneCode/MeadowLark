@@ -71,10 +71,16 @@ class PlaylistDialog(QDialog):
         """
         Return the current text entered in the playlist input field.
 
+        Whitespace is stripped everywhere, not just at the ends: yt-dlp's
+        ``playlist_items`` parser matches each comma-separated segment against a
+        regex with no whitespace tolerance, so a naturally-typed selector like
+        "1-3, 5 - 10" would otherwise pass this dialog and fail deep inside
+        yt-dlp's option validation instead.
+
         Returns:
-            str: The text from the playlist input.
+            str: The text from the playlist input, with all whitespace removed.
         """
-        return self.playlistInput.text()
+        return "".join(self.playlistInput.text().split())
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """
