@@ -2,7 +2,7 @@
 Unit tests for MyWindow's pending-downloads glue in meadowlark.pyw.
 
 Covers _refresh_pending_button, _show_pending_downloads, _on_pending_dialog_destroyed,
-_remove_pending_download, _download_pending_now.
+_remove_pending_downloads, _download_pending_now.
 
 These methods had zero existing test coverage (tests/test_pending_downloads_dialog.py
 only exercises PendingDownloadsDialog itself, which is deliberately a dumb view; all
@@ -68,7 +68,7 @@ def _make_win(vd, pending_path: Path):
         _refresh_pending_button = vd.MyWindow._refresh_pending_button
         _show_pending_downloads = vd.MyWindow._show_pending_downloads
         _on_pending_dialog_destroyed = vd.MyWindow._on_pending_dialog_destroyed
-        _remove_pending_download = vd.MyWindow._remove_pending_download
+        _remove_pending_downloads = vd.MyWindow._remove_pending_downloads
         _download_pending_now = vd.MyWindow._download_pending_now
 
         def handle_log_entry(self, msg: str) -> None:
@@ -164,10 +164,10 @@ def test_refresh_pending_button_no_dialog_does_not_raise(tmp_path: Path) -> None
     win._refresh_pending_button([])  # must not raise on None._pending_dialog
 
 
-# --- _remove_pending_download -----------------------------------------------
+# --- _remove_pending_downloads -----------------------------------------------
 
 
-def test_remove_pending_download_removes_from_store_and_refreshes_button(
+def test_remove_pending_downloads_removes_from_store_and_refreshes_button(
     tmp_path: Path,
 ) -> None:
     vd = import_vid_module()
@@ -177,7 +177,7 @@ def test_remove_pending_download_removes_from_store_and_refreshes_button(
     texts: list[str] = []
     win.buttonPending = SimpleNamespace(setText=texts.append, setVisible=lambda _v: None)
 
-    win._remove_pending_download("drop")
+    win._remove_pending_downloads(["drop"])
 
     from src.pending_queue import load_pending_queue
 
@@ -186,13 +186,31 @@ def test_remove_pending_download_removes_from_store_and_refreshes_button(
     assert texts[-1] == "⏳ 1"
 
 
-def test_remove_pending_download_missing_url_is_noop(tmp_path: Path) -> None:
+def test_remove_pending_downloads_removes_every_given_url_in_one_write(
+    tmp_path: Path,
+) -> None:
+    vd = import_vid_module()
+    path = tmp_path / "pending_queue.json"
+    save_pending_queue(
+        path,
+        [_pending_record(url="keep"), _pending_record(url="a"), _pending_record(url="b")],
+    )
+    win = _make_win(vd, path)
+
+    win._remove_pending_downloads(["a", "b"])
+
+    from src.pending_queue import load_pending_queue
+
+    assert [r["url"] for r in load_pending_queue(path)] == ["keep"]
+
+
+def test_remove_pending_downloads_missing_url_is_noop(tmp_path: Path) -> None:
     vd = import_vid_module()
     path = tmp_path / "pending_queue.json"
     save_pending_queue(path, [_pending_record(url="keep")])
     win = _make_win(vd, path)
 
-    win._remove_pending_download("does-not-exist")
+    win._remove_pending_downloads(["does-not-exist"])
 
     from src.pending_queue import load_pending_queue
 
@@ -208,7 +226,7 @@ def test_download_pending_now_with_no_url_is_noop(tmp_path: Path) -> None:
     save_pending_queue(path, [_pending_record(url="untouched")])
     win = _make_win(vd, path)
 
-    win._download_pending_now({"url": None, "title": "no url"})
+    win._download_pending_now([{"url": None, "title": "no url"}])
 
     assert win.requested == []
     assert win.logs == []
@@ -221,7 +239,7 @@ def test_download_pending_now_missing_url_key_is_noop(tmp_path: Path) -> None:
     vd = import_vid_module()
     win = _make_win(vd, tmp_path / "pending_queue.json")
 
-    win._download_pending_now({"title": "no url key at all"})
+    win._download_pending_now([{"title": "no url key at all"}])
 
     assert win.requested == []
     assert win.logs == []
@@ -236,7 +254,7 @@ def test_download_pending_now_removes_then_requests_with_record_source(
     save_pending_queue(path, [record])
     win = _make_win(vd, path)
 
-    win._download_pending_now(record)
+    win._download_pending_now([record])
 
     from src.pending_queue import load_pending_queue
 
@@ -255,9 +273,29 @@ def test_download_pending_now_falls_back_to_1080_when_source_missing(
     save_pending_queue(path, [{**record, "source": "1080"}])
     win = _make_win(vd, path)
 
-    win._download_pending_now(record)
+    win._download_pending_now([record])
 
     assert win.requested == [(["https://example.com/vid"], "1080")]
+
+
+def test_download_pending_now_processes_every_runnable_record(tmp_path: Path) -> None:
+    """The multi-select regression: every actionable record must be requested, not just one."""
+    vd = import_vid_module()
+    path = tmp_path / "pending_queue.json"
+    record_a = _pending_record(url="https://example.com/a", source="1080")
+    record_b = _pending_record(url="https://example.com/b", source="720")
+    save_pending_queue(path, [record_a, record_b])
+    win = _make_win(vd, path)
+
+    win._download_pending_now([record_a, record_b, {"title": "no url key"}])
+
+    from src.pending_queue import load_pending_queue
+
+    assert load_pending_queue(path) == []
+    assert win.requested == [
+        (["https://example.com/a"], "1080"),
+        (["https://example.com/b"], "720"),
+    ]
 
 
 def test_download_pending_now_reentrant_repark_leaves_consistent_store(
@@ -285,7 +323,7 @@ def test_download_pending_now_reentrant_repark_leaves_consistent_store(
 
     win.request_detected = fake_request_detected
 
-    win._download_pending_now(record)
+    win._download_pending_now([record])
 
     remaining = load_pending_queue(path)
     assert len(remaining) == 1

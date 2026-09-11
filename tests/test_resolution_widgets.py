@@ -47,7 +47,7 @@ def _make_window(vd, tmp_path: Path):
         _apply_always_on_top = vd.MyWindow._apply_always_on_top
         _restart_podcast_timer = vd.MyWindow._restart_podcast_timer
         _download_pending_now = vd.MyWindow._download_pending_now
-        _remove_pending_download = vd.MyWindow._remove_pending_download
+        _remove_pending_downloads = vd.MyWindow._remove_pending_downloads
         _refresh_pending_button = vd.MyWindow._refresh_pending_button
 
         def __init__(self) -> None:
@@ -282,7 +282,7 @@ def test_pending_fallback_uses_highest_enabled(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
 
     with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
-        window._download_pending_now({"url": "u"})
+        window._download_pending_now([{"url": "u"}])
 
     assert window.requested == [(["u"], "2160")]
 
@@ -293,7 +293,7 @@ def test_pending_explicit_source_bypasses_fallback(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
 
     with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
-        window._download_pending_now({"url": "u", "source": "480"})
+        window._download_pending_now([{"url": "u", "source": "480"}])
 
     assert window.requested == [(["u"], "480")]
 
@@ -304,7 +304,7 @@ def test_pending_empty_string_source_falls_back(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
 
     with patch.object(vd, "enabled_heights", return_value=(720,)):
-        window._download_pending_now({"url": "u", "source": ""})
+        window._download_pending_now([{"url": "u", "source": ""}])
 
     assert window.requested == [(["u"], "720")]
 
@@ -314,7 +314,7 @@ def test_pending_missing_url_is_a_no_op(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
 
-    window._download_pending_now({"source": "1080"})
+    window._download_pending_now([{"source": "1080"}])
 
     assert window.requested == []
 

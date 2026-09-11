@@ -131,7 +131,7 @@ from src.pending_queue import (
     load_pending_queue,
     make_pending_record,
     migrate_legacy_live_queue,
-    remove_pending,
+    remove_pending_many,
     save_pending_queue,
     upsert_pending,
 )
@@ -1532,7 +1532,7 @@ class MyWindow(QWidget):
             load_pending_queue(self.pending_queue_path), self
         )
         dialog.download_now_requested.connect(self._download_pending_now)
-        dialog.remove_requested.connect(self._remove_pending_download)
+        dialog.remove_requested.connect(self._remove_pending_downloads)
         dialog.destroyed.connect(self._on_pending_dialog_destroyed)
         dialog.show()
         self._pending_dialog = dialog
@@ -1540,28 +1540,30 @@ class MyWindow(QWidget):
     def _on_pending_dialog_destroyed(self) -> None:
         self._pending_dialog = None
 
-    def _remove_pending_download(self, url: str) -> None:
-        """Drop a parked download and refresh the button and dialog."""
-        self._refresh_pending_button(remove_pending(self.pending_queue_path, url))
+    def _remove_pending_downloads(self, urls: list[str]) -> None:
+        """Drop parked downloads in one write and refresh the button and dialog."""
+        self._refresh_pending_button(remove_pending_many(self.pending_queue_path, urls))
 
-    def _download_pending_now(self, record: dict) -> None:
-        """Force a parked download through the normal pipeline, ignoring its release time."""
-        url = record.get("url")
-        if not url:
+    def _download_pending_now(self, records: list[dict]) -> None:
+        """Force parked downloads through the normal pipeline, ignoring their release time."""
+        runnable = [r for r in records if r.get("url")]
+        if not runnable:
             return
-        # Remove-first mirrors _retry_failed_downloads: if it is still unreleased the
+        # Remove-first mirrors _retry_failed_downloads: if one is still unreleased the
         # failure path re-parks it with a fresh release time, and a success leaves the
         # pending list clean.
-        self._remove_pending_download(url)
-        self.handle_log_entry(
-            f"Downloading pending item now: {record.get('title') or url}"
-        )
+        self._remove_pending_downloads([r["url"] for r in runnable])
         # enabled_heights() never returns an empty tuple (falls back to the default
         # pair), so [0] is safe. Falling back to the highest enabled rung rather than
         # a literal "1080" avoids silently dropping to 1080 for a user who only
         # enabled 2160.
         fallback_source = source_key(enabled_heights()[0])
-        self.request_detected([url], record.get("source") or fallback_source)
+        for record in runnable:
+            url = record["url"]
+            self.handle_log_entry(
+                f"Downloading pending item now: {record.get('title') or url}"
+            )
+            self.request_detected([url], record.get("source") or fallback_source)
 
     def _on_download_failed(self, record: dict) -> None:
         """Persist a failure reported by the download thread (GUI-thread slot)."""

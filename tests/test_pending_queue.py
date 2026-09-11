@@ -14,6 +14,7 @@ from src.pending_queue import (
     merge_pending,
     migrate_legacy_live_queue,
     remove_pending,
+    remove_pending_many,
     save_pending_queue,
     upsert_pending,
 )
@@ -468,6 +469,55 @@ def test_migrate_legacy_oserror_on_rename_still_reports_true_but_file_stays(
     assert result is True
     assert load_pending_queue(store)[0]["url"] == "https://y/1"
     assert legacy_path.exists()  # rename failure leaves the source file in place
+
+
+def test_remove_pending_many_mixed_present_and_absent_urls(store: Path) -> None:
+    """A batch mixing known and unknown urls drops only the known ones, unknowns are ignored."""
+    for url in ("https://y/keep", "https://y/a", "https://y/b"):
+        upsert_pending(store, make_pending_record(url, "youtube"))
+
+    result = remove_pending_many(store, ["https://y/a", "https://y/b", "https://y/does-not-exist"])
+
+    assert [r["url"] for r in result] == ["https://y/keep"]
+    assert [r["url"] for r in load_pending_queue(store)] == ["https://y/keep"]
+
+
+def test_remove_pending_many_duplicate_urls_in_input_still_removes_once(store: Path) -> None:
+    """Duplicate urls in the input list must not error or double-count; net effect is one removal."""
+    upsert_pending(store, make_pending_record("https://y/keep", "youtube"))
+    upsert_pending(store, make_pending_record("https://y/dup", "youtube"))
+
+    result = remove_pending_many(store, ["https://y/dup", "https://y/dup", "https://y/dup"])
+
+    assert [r["url"] for r in result] == ["https://y/keep"]
+
+
+def test_remove_pending_many_no_matching_urls_skips_write(
+    store: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When nothing in the batch matches, save_pending_queue must not be called (one-write contract)."""
+    upsert_pending(store, make_pending_record("https://y/keep", "youtube"))
+    save_calls: list[list] = []
+
+    def spy_save(path: Path, records: list) -> None:
+        save_calls.append(records)
+
+    import src.pending_queue as pending_queue_module
+
+    monkeypatch.setattr(pending_queue_module, "save_pending_queue", spy_save)
+
+    result = remove_pending_many(store, ["https://y/absent"])
+
+    assert save_calls == []
+    assert [r["url"] for r in result] == ["https://y/keep"]
+
+
+def test_remove_pending_many_empty_url_list_is_noop(store: Path) -> None:
+    upsert_pending(store, make_pending_record("https://y/keep", "youtube"))
+
+    result = remove_pending_many(store, [])
+
+    assert [r["url"] for r in result] == ["https://y/keep"]
 
 
 def test_concurrent_upsert_calls_lose_an_update(tmp_path: Path) -> None:

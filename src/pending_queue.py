@@ -1,6 +1,7 @@
 """Persistent store for downloads deferred until they become available."""
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 from .logging_utils import get_local_timestamp, log_exception
@@ -110,6 +111,16 @@ def remove_pending(path: Path, url: str) -> list[PendingRecord]:
     records = [r for r in load_pending_queue(path) if r.get("url") != url]
     save_pending_queue(path, records)
     return records
+
+
+def remove_pending_many(path: Path, urls: Iterable[str]) -> list[PendingRecord]:
+    """Remove every record whose URL is in *urls* in one write; unknown URLs are ignored."""
+    drop = set(urls)
+    records = load_pending_queue(path)
+    kept = [r for r in records if r.get("url") not in drop]
+    if len(kept) != len(records):
+        save_pending_queue(path, kept)
+    return kept
 
 
 def _load_legacy_entries(legacy_path: Path) -> dict[str, tuple[str, str | None, str | None]]:

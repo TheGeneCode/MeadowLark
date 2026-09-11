@@ -189,7 +189,7 @@ def test_record_missing_url_key_entirely_keeps_buttons_disabled() -> None:
 
 
 def test_can_act_none_record_is_falsy() -> None:
-    """No selection -> _selected_record() is None -> _can_act(None) must not raise."""
+    """No selection -> _selected_records() is empty -> _can_act(None) must not raise."""
     dialog = PendingDownloadsDialog([_record()])
 
     assert dialog._can_act(None) is False
@@ -214,13 +214,12 @@ def test_download_now_emits_full_record() -> None:
     dialog = PendingDownloadsDialog([record])
     dialog._table.selectRow(0)
 
-    captured: list[dict] = []
+    captured: list[list[dict]] = []
     dialog.download_now_requested.connect(captured.append)
 
     dialog._download_btn.click()
 
-    assert len(captured) == 1
-    assert captured[0] == record
+    assert captured == [[record]]
 
 
 def test_remove_emits_url() -> None:
@@ -228,12 +227,87 @@ def test_remove_emits_url() -> None:
     dialog = PendingDownloadsDialog([record])
     dialog._table.selectRow(0)
 
-    captured: list[str] = []
+    captured: list[list[str]] = []
     dialog.remove_requested.connect(captured.append)
 
     dialog._remove_btn.click()
 
-    assert captured == ["https://example.com/video"]
+    assert captured == [["https://example.com/video"]]
+
+
+def test_multi_select_download_now_emits_every_actionable_record() -> None:
+    """The core regression: selecting several rows must act on all of them, not just the last."""
+    record_a = _record(url="https://example.com/a", title="A")
+    record_b = _record(url="https://example.com/b", title="B")
+    dialog = PendingDownloadsDialog([record_a, record_b])
+    dialog._table.selectAll()
+
+    assert dialog._download_btn.text() == "Download Now (2)"
+
+    captured: list[list[dict]] = []
+    dialog.download_now_requested.connect(captured.append)
+    dialog._download_btn.click()
+
+    assert captured == [[record_a, record_b]]
+
+
+def test_multi_select_remove_emits_every_actionable_url() -> None:
+    record_a = _record(url="https://example.com/a")
+    record_b = _record(url="https://example.com/b")
+    dialog = PendingDownloadsDialog([record_a, record_b])
+    dialog._table.selectAll()
+
+    assert dialog._remove_btn.text() == "Remove (2)"
+
+    captured: list[list[str]] = []
+    dialog.remove_requested.connect(captured.append)
+    dialog._remove_btn.click()
+
+    assert captured == [["https://example.com/a", "https://example.com/b"]]
+
+
+def test_multi_select_skips_records_without_url() -> None:
+    """A mixed selection acts on the actionable rows and silently skips the rest."""
+    record_a = _record(url="https://example.com/a")
+    record_no_url = _record(url=None)
+    dialog = PendingDownloadsDialog([record_a, record_no_url])
+    dialog._table.selectAll()
+
+    assert dialog._download_btn.text() == "Download Now"  # only 1 actionable -> no count suffix
+
+    captured: list[list[dict]] = []
+    dialog.download_now_requested.connect(captured.append)
+    dialog._download_btn.click()
+
+    assert captured == [[record_a]]
+
+
+def test_selection_survives_refresh_by_url_not_row_index() -> None:
+    """set_records must re-select by URL; a reorder/shrink must not retarget the wrong row."""
+    record_a = _record(url="https://example.com/a", title="A")
+    record_b = _record(url="https://example.com/b", title="B")
+    dialog = PendingDownloadsDialog([record_a, record_b])
+    dialog._table.selectRow(1)  # select B
+
+    dialog.set_records([record_b, record_a])  # order flipped, B still present
+
+    captured: list[list[str]] = []
+    dialog.remove_requested.connect(captured.append)
+    dialog._remove_btn.click()
+
+    assert captured == [["https://example.com/b"]]
+
+
+def test_selection_dropped_when_record_removed_by_refresh() -> None:
+    record_a = _record(url="https://example.com/a")
+    record_b = _record(url="https://example.com/b")
+    dialog = PendingDownloadsDialog([record_a, record_b])
+    dialog._table.selectRow(1)  # select B
+
+    dialog.set_records([record_a])  # B is gone
+
+    assert dialog._download_btn.isEnabled() is False
+    assert dialog._remove_btn.isEnabled() is False
 
 
 def test_set_records_replaces_contents_and_count_label() -> None:
@@ -381,7 +455,7 @@ def test_can_act_false_for_url_none() -> None:
 
 
 def test_can_act_false_for_none_record() -> None:
-    """_selected_record() returning None (no selection) must disable both buttons."""
+    """No selection (empty _selected_records()) must disable both buttons."""
     dialog = PendingDownloadsDialog([_record()])
 
     assert dialog._can_act(None) is False
