@@ -4,6 +4,21 @@ from urllib.parse import parse_qs, urlparse
 
 _YOUTUBE_WATCH_HOSTS = ("youtube.com", "www.youtube.com", "m.youtube.com")
 _YOUTUBE_SHORT_HOSTS = ("youtu.be", "www.youtu.be")
+_WEB_SCHEMES = ("http://", "https://")
+
+
+def web_url(value: object) -> str | None:
+    """
+    Return *value* if it is an http(s) URL, else None.
+
+    Gate for anything handed to ``webbrowser``: on Windows it passes the string
+    to ``os.startfile``, and when that fails (a bare video/playlist id is not a
+    file) it silently falls through to the next registered browser - msedge.exe
+    - instead of the user's default, opening the raw string as a search.
+    """
+    if isinstance(value, str) and value.strip().lower().startswith(_WEB_SCHEMES):
+        return value.strip()
+    return None
 
 
 def extract_video_id(url: str | None) -> str | None:

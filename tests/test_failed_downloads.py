@@ -552,6 +552,36 @@ def test_log_error_line_becomes_a_failed_record() -> None:
     assert captured[0]["source"] == "1080"
 
 
+def test_extraction_failure_labels_the_title_unavailable_instead_of_showing_the_id() -> None:
+    """
+    A bare id must never pose as a title.
+
+    YouTube withholds a private/deleted video's title from the watch page, the
+    playlist listing, and oEmbed alike, so there is no real title to show.
+    """
+    hook, captured = _hook_with_capture()
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook.flush()
+
+    assert captured[0]["title"] == "[Title unavailable] JsxNJgm7VXA"
+
+
+def test_progress_error_without_a_title_labels_it_instead_of_showing_the_id() -> None:
+    hook, captured = _hook_with_capture()
+    hook({"status": "error", "info_dict": {"id": "v1", "webpage_url": "u"}})
+    hook.flush()
+
+    assert captured[0]["title"] == "[Title unavailable] v1"
+
+
+def test_progress_error_with_neither_title_nor_id_keeps_the_unknown_placeholder() -> None:
+    hook, captured = _hook_with_capture()
+    hook({"status": "error", "info_dict": {"webpage_url": "u"}})
+    hook.flush()
+
+    assert captured[0]["title"] == "(unknown title)"
+
+
 def test_log_error_line_does_not_overwrite_a_progress_hook_failure() -> None:
     """The richer progress-hook record wins; the same video is reported once."""
     hook, captured = _hook_with_capture()
@@ -608,13 +638,29 @@ def test_non_youtube_extractor_keeps_the_bare_id_rather_than_inventing_a_url() -
     assert captured[0]["urls"] == ["some-slug"]
 
 
-def test_extractor_tag_with_colon_is_not_mistaken_for_youtube() -> None:
-    """A tab/playlist-level extractor (e.g. youtube:tab) must not build a watch URL."""
+@pytest.mark.parametrize("ie", ["youtube:tab", "youtube:playlist"])
+def test_playlist_level_error_records_the_playlist_url_not_the_bare_id(ie: str) -> None:
+    """A bare playlist id handed to webbrowser misses the default browser on Windows."""
     hook, captured = _hook_with_capture()
-    hook.record_log_error("ERROR: [youtube:tab] PLxxxxxxxxxxxxxxxx: This playlist does not exist")
+    hook.record_log_error(
+        f"ERROR: [{ie}] PLRWvNQVqAeWKt7kCUfEMdJi40m7H58CJd: "
+        "YouTube said: The playlist does not exist.",
+    )
     hook.flush()
 
-    assert captured[0]["urls"] == ["PLxxxxxxxxxxxxxxxx"]
+    assert captured[0]["urls"] == [
+        "https://www.youtube.com/playlist?list=PLRWvNQVqAeWKt7kCUfEMdJi40m7H58CJd",
+    ]
+    assert captured[0]["title"] == "[Title unavailable] PLRWvNQVqAeWKt7kCUfEMdJi40m7H58CJd"
+
+
+def test_tab_error_for_a_non_playlist_id_keeps_the_bare_id() -> None:
+    """A channel/handle tab id is not a playlist id, so no playlist URL is invented."""
+    hook, captured = _hook_with_capture()
+    hook.record_log_error("ERROR: [youtube:tab] UCuAXFkgsw1L7xaCfnd5JJOw: This channel does not exist")
+    hook.flush()
+
+    assert captured[0]["urls"] == ["UCuAXFkgsw1L7xaCfnd5JJOw"]
 
 
 def test_video_id_with_underscore_is_captured_and_builds_a_watch_url() -> None:

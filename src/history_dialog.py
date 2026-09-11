@@ -25,7 +25,7 @@ from QYT import parse_history_log
 from .config import ARCHIVE_PATH
 from .logging_utils import log_exception
 from .podcast_filtering import load_downloaded_video_ids
-from .url_utils import extract_video_id
+from .url_utils import extract_video_id, web_url
 
 _COLUMNS = ("Datetime", "Site", "Type", "Title", "Result")
 _RESULT_OPTIONS = ("All", "SUCCESS", "FAIL", "SKIPPED")
@@ -161,7 +161,7 @@ class HistoryDialog(QDialog):
         title_item = self._table.item(row, 3)
         if title_item is None:
             return None
-        return title_item.data(Qt.ItemDataRole.UserRole)  # type: ignore[return-value]
+        return web_url(title_item.data(Qt.ItemDataRole.UserRole))
 
     def _get_selected_video_id(self) -> str | None:
         row = self._table.currentRow()

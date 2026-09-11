@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .release_status import format_release_at, parse_release_at
+from .url_utils import web_url
 
 _COLUMNS = ("Available At", "Kind", "Type", "Title")
 _RECORD_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -172,9 +173,10 @@ class PendingDownloadsDialog(QDialog):
         if can_act:
             remove_action.triggered.connect(self._remove_selected)
 
+        browser_url = web_url(url)
         open_action = menu.addAction("Open in Browser")
-        open_action.setEnabled(bool(url))
-        if url:
-            open_action.triggered.connect(lambda: webbrowser.open_new_tab(url))
+        open_action.setEnabled(browser_url is not None)
+        if browser_url is not None:
+            open_action.triggered.connect(lambda: webbrowser.open_new_tab(browser_url))
 
         menu.exec(self._table.viewport().mapToGlobal(pos))

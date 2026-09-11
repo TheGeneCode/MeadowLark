@@ -61,6 +61,7 @@ def test_buttons_disabled_without_selection() -> None:
 
     assert dialog._retry_btn.isEnabled() is False
     assert dialog._delete_btn.isEnabled() is False
+    assert dialog._mark_downloaded_btn.isEnabled() is False
 
 
 def test_retry_emits_full_record() -> None:
@@ -92,6 +93,92 @@ def test_delete_emits_key() -> None:
     assert captured == [record["key"]]
 
 
+def test_mark_downloaded_enabled_for_youtube_with_extractable_id() -> None:
+    record = _record(site="youtube", urls=["https://www.youtube.com/watch?v=abc123"])
+    dialog = FailedDownloadsDialog([record])
+    dialog._table.selectRow(0)
+
+    assert dialog._mark_downloaded_btn.isEnabled() is True
+
+
+def test_mark_downloaded_disabled_for_non_youtube_url() -> None:
+    record = _record(site="twitch", urls=["https://www.twitch.tv/videos/12345"])
+    dialog = FailedDownloadsDialog([record])
+    dialog._table.selectRow(0)
+
+    assert dialog._mark_downloaded_btn.isEnabled() is False
+
+
+def test_mark_downloaded_enabled_despite_unknown_site_tag() -> None:
+    """
+    A record with site="unknown" but a real YouTube URL still enables the button.
+
+    A playlist-sourced failure's "site" can be wrongly "unknown" even for a real
+    YouTube URL: detect_site_from_urls tags site from the *playlist file's* raw
+    entries, and a bare-playlist-id file (e.g. 720playlists.txt) never contains
+    "youtube.com", so every failure sourced from it is mistagged. The gate must
+    not depend on that tag -- only on whether the failure's own URL resolves.
+    """
+    record = _record(site="unknown", urls=["https://www.youtube.com/watch?v=abc123"])
+    dialog = FailedDownloadsDialog([record])
+    dialog._table.selectRow(0)
+
+    assert dialog._mark_downloaded_btn.isEnabled() is True
+
+
+def test_mark_downloaded_disabled_for_playlist_level_failure() -> None:
+    """A playlist/channel-level failure has no per-video ID to archive."""
+    record = _record(site="youtube", urls=["https://www.youtube.com/playlist?list=PLx"])
+    dialog = FailedDownloadsDialog([record])
+    dialog._table.selectRow(0)
+
+    assert dialog._mark_downloaded_btn.isEnabled() is False
+
+
+def test_mark_downloaded_disabled_when_urls_missing() -> None:
+    record = _record(site="youtube")
+    del record["urls"]
+    dialog = FailedDownloadsDialog([record])
+    dialog._table.selectRow(0)
+
+    assert dialog._mark_downloaded_btn.isEnabled() is False
+
+
+def test_mark_downloaded_emits_full_record() -> None:
+    record = _record(site="youtube", urls=["https://www.youtube.com/watch?v=abc123"])
+    dialog = FailedDownloadsDialog([record])
+    dialog._table.selectRow(0)
+
+    captured: list[dict] = []
+    dialog.mark_downloaded_requested.connect(captured.append)
+
+    dialog._mark_downloaded_btn.click()
+
+    assert captured == [record]
+
+
+@pytest.mark.parametrize(
+    "urls",
+    [
+        "https://www.youtube.com/watch?v=abc123",  # a bare string, not a list
+        [],
+    ],
+    ids=["urls-is-a-string-not-a-list", "urls-is-an-empty-list"],
+)
+def test_video_id_none_for_malformed_urls_shapes(urls: object) -> None:
+    """
+    ``_video_id`` must reject both sides of its ``isinstance``/truthiness guard.
+
+    A stored record's ``urls`` field could plausibly be a bare string rather
+    than a list (a hand-edited or schema-drifted JSON file), or an explicit
+    empty list. Both must disable the action rather than index into the
+    wrong type or raise.
+    """
+    record = _record(site="youtube", urls=urls)
+
+    assert FailedDownloadsDialog._video_id(record) is None
+
+
 def test_retry_disabled_for_unknown_source() -> None:
     record = _record(source="unknown")
     with patch("src.failed_downloads_dialog.get_source_options", return_value={}):
@@ -119,6 +206,7 @@ def test_empty_records() -> None:
     assert dialog._table.rowCount() == 0
     assert dialog._retry_btn.isEnabled() is False
     assert dialog._delete_btn.isEnabled() is False
+    assert dialog._mark_downloaded_btn.isEnabled() is False
 
 
 # --- _can_retry / _delete_selected: malformed-record boundary (real, unmocked
@@ -204,6 +292,40 @@ def test_selected_record_missing_urls_key_returns_none_for_urls() -> None:
     selected = dialog._selected_record()
     assert selected is not None
     assert selected.get("urls") is None
+
+
+# --- Open in Browser: only web URLs may reach webbrowser. On Windows a non-URL
+# string makes os.startfile fail, and webbrowser silently falls through to the
+# next registered browser (msedge.exe) instead of the user's default. ---
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://www.youtube.com/playlist?list=PLx", "http://example.com/v", "HTTPS://EXAMPLE.COM/v"],
+)
+def test_browser_url_offers_web_urls(url: str) -> None:
+    assert FailedDownloadsDialog._browser_url(_record(urls=[url])) == url
+
+
+@pytest.mark.parametrize(
+    "urls",
+    [
+        ["PLRWvNQVqAeWKt7kCUfEMdJi40m7H58CJd"],
+        ["some-slug"],
+        ["C:/Videos/clip.mp4"],
+        ["javascript:alert(1)"],
+        [],
+        [None],
+        [12345],
+    ],
+)
+def test_browser_url_rejects_non_web_urls(urls: list) -> None:
+    assert FailedDownloadsDialog._browser_url(_record(urls=urls)) is None
+
+
+@pytest.mark.parametrize("record", [None, {"key": "k"}, {"key": "k", "urls": "https://x.com"}])
+def test_browser_url_tolerates_malformed_records(record: dict | None) -> None:
+    assert FailedDownloadsDialog._browser_url(record) is None
 
 
 # --- set_records / selection interaction across a shrinking table ---

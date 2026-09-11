@@ -169,7 +169,7 @@ from src.settings_dialog import (
     enabled_heights,
     get_setting,
 )
-from src.url_utils import extract_playlist_id
+from src.url_utils import extract_playlist_id, extract_video_id
 from src.window_geometry import GeometryMemoryDialog
 from src.ydl_options import (
     build_podcast_outtmpl,
@@ -1628,6 +1628,7 @@ class MyWindow(QWidget):
             load_failed_downloads(FAILED_DOWNLOADS_FILE), self
         )
         dialog.retry_requested.connect(self._retry_failed_download)
+        dialog.mark_downloaded_requested.connect(self._mark_failed_downloaded)
         dialog.delete_requested.connect(self._delete_failed_download)
         dialog.destroyed.connect(self._on_failed_dialog_destroyed)
         dialog.show()
@@ -1650,6 +1651,31 @@ class MyWindow(QWidget):
         self._delete_failed_download(record["key"])
         self.handle_log_entry(f"Retrying failed download: {record['title']}")
         self.request_detected(list(record["urls"]), record["source"])
+
+    def _mark_failed_downloaded(self, record: dict) -> None:
+        """
+        Add a failed video's ID to the archive and drop it from the failed list.
+
+        Writing to the same archive yt-dlp's download_archive option checks is
+        what keeps a permanently-broken (private/deleted) playlist entry from
+        being re-reported as failed on every future playlist scan.
+        """
+        urls = record.get("urls") or []
+        video_id = extract_video_id(urls[0]) if urls else None
+        if not video_id:
+            return
+        try:
+            existing_ids = load_downloaded_video_ids(str(ARCHIVE_PATH))
+            if video_id not in existing_ids:
+                with ARCHIVE_PATH.open("a", encoding="utf-8") as archive:
+                    archive.write(f"youtube {video_id}\n")
+        except OSError as exc:
+            utils.log_exception(
+                exc, "Failed to add video to archive from Failed Downloads"
+            )
+            return
+        self._delete_failed_download(record.get("key"))
+        self.handle_log_entry(f"Marked as downloaded: {record.get('title') or video_id}")
 
     def _show_history(self) -> None:
         """Open a non-blocking dialog showing download history (Ctrl+H)."""

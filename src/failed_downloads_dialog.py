@@ -17,11 +17,13 @@ from PyQt6.QtWidgets import (
 )
 
 from .logging_utils import log_exception
+from .url_utils import extract_video_id, web_url
 from .ydl_options import get_source_options
 
 _COLUMNS = ("Failed At", "Site", "Type", "Title")
 _RECORD_ROLE = Qt.ItemDataRole.UserRole + 1
 _UNKNOWN_SOURCE_TOOLTIP = "Unknown source type — cannot rebuild download options"
+_NOT_YOUTUBE_TOOLTIP = "Only available for YouTube videos with a resolvable video ID"
 
 
 class FailedDownloadsDialog(QDialog):
@@ -35,6 +37,7 @@ class FailedDownloadsDialog(QDialog):
 
     retry_requested = pyqtSignal(dict)  # full record
     delete_requested = pyqtSignal(str)  # record key
+    mark_downloaded_requested = pyqtSignal(dict)  # full record
 
     def __init__(self, records: list[dict], parent: QWidget | None = None) -> None:
         """Build the dialog layout and populate it with the given records."""
@@ -78,6 +81,11 @@ class FailedDownloadsDialog(QDialog):
         self._retry_btn.setEnabled(False)
         self._retry_btn.clicked.connect(self._retry_selected)
         row.addWidget(self._retry_btn)
+
+        self._mark_downloaded_btn = QPushButton("Mark as Downloaded")
+        self._mark_downloaded_btn.setEnabled(False)
+        self._mark_downloaded_btn.clicked.connect(self._mark_downloaded_selected)
+        row.addWidget(self._mark_downloaded_btn)
 
         self._delete_btn = QPushButton("Delete")
         self._delete_btn.setEnabled(False)
@@ -143,17 +151,45 @@ class FailedDownloadsDialog(QDialog):
     def _can_delete(self, record: dict | None) -> bool:
         return bool(record) and bool(record.get("key"))  # type: ignore[union-attr]
 
+    @staticmethod
+    def _video_id(record: dict | None) -> str | None:
+        # Gate on the URL resolving to a video id, not on record["site"]: a
+        # playlist-sourced failure's site is detected from the *playlist file's*
+        # raw entries (see detect_site_from_urls), which for a bare-playlist-id
+        # file (e.g. 720playlists.txt) comes back "unknown" even though the
+        # failed entry's own urls[0] is a real youtube.com watch URL. The video
+        # id -- what the archive actually keys on -- only needs that URL.
+        if not record:
+            return None
+        urls = record.get("urls")
+        if not isinstance(urls, list) or not urls:
+            return None
+        return extract_video_id(urls[0])
+
+    def _can_mark_downloaded(self, record: dict | None) -> bool:
+        return self._video_id(record) is not None
+
     def _on_selection_changed(self) -> None:
         record = self._selected_record()
         can_retry = self._can_retry(record)
+        can_mark_downloaded = self._can_mark_downloaded(record)
         self._delete_btn.setEnabled(self._can_delete(record))
         self._retry_btn.setEnabled(can_retry)
         self._retry_btn.setToolTip("" if can_retry else _UNKNOWN_SOURCE_TOOLTIP)
+        self._mark_downloaded_btn.setEnabled(can_mark_downloaded)
+        self._mark_downloaded_btn.setToolTip(
+            "" if can_mark_downloaded else _NOT_YOUTUBE_TOOLTIP
+        )
 
     def _retry_selected(self) -> None:
         record = self._selected_record()
         if record is not None:
             self.retry_requested.emit(record)
+
+    def _mark_downloaded_selected(self) -> None:
+        record = self._selected_record()
+        if record is not None and self._can_mark_downloaded(record):
+            self.mark_downloaded_requested.emit(record)
 
     def _delete_selected(self) -> None:
         record = self._selected_record()
@@ -161,9 +197,17 @@ class FailedDownloadsDialog(QDialog):
         if key:
             self.delete_requested.emit(key)
 
+    @staticmethod
+    def _browser_url(record: dict | None) -> str | None:
+        # Records come from a user-editable JSON file, and older ones may hold a
+        # bare id rather than a URL, so every shape is checked, never trusted.
+        urls = record.get("urls") if record else None
+        if not isinstance(urls, list) or not urls:
+            return None
+        return web_url(urls[0])
+
     def _show_context_menu(self, pos: QPoint) -> None:
         record = self._selected_record()
-        urls = record.get("urls") if record else None
         can_retry = self._can_retry(record)
 
         menu = QMenu(self)
@@ -175,14 +219,23 @@ class FailedDownloadsDialog(QDialog):
         else:
             retry_action.setToolTip(_UNKNOWN_SOURCE_TOOLTIP)
 
+        mark_downloaded_action = menu.addAction("Mark as Downloaded")
+        can_mark_downloaded = self._can_mark_downloaded(record)
+        mark_downloaded_action.setEnabled(can_mark_downloaded)
+        if can_mark_downloaded:
+            mark_downloaded_action.triggered.connect(self._mark_downloaded_selected)
+        else:
+            mark_downloaded_action.setToolTip(_NOT_YOUTUBE_TOOLTIP)
+
         delete_action = menu.addAction("Delete")
         delete_action.setEnabled(self._can_delete(record))
         if self._can_delete(record):
             delete_action.triggered.connect(self._delete_selected)
 
+        url = self._browser_url(record)
         open_action = menu.addAction("Open in Browser")
-        open_action.setEnabled(bool(urls))
-        if urls:
-            open_action.triggered.connect(lambda: webbrowser.open_new_tab(urls[0]))
+        open_action.setEnabled(url is not None)
+        if url is not None:
+            open_action.triggered.connect(lambda: webbrowser.open_new_tab(url))
 
         menu.exec(self._table.viewport().mapToGlobal(pos))

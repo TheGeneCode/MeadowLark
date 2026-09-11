@@ -1,6 +1,43 @@
 import pytest
 
-from src.url_utils import extract_playlist_id, extract_video_id
+from src.url_utils import extract_playlist_id, extract_video_id, web_url
+
+# ---------------------------------------------------------------------------
+# web_url
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("https://example.com/v", "https://example.com/v"),
+        ("http://example.com/v", "http://example.com/v"),
+        ("  https://example.com/v  ", "https://example.com/v"),  # padding stripped
+        ("HTTPS://EXAMPLE.COM/v", "HTTPS://EXAMPLE.COM/v"),  # case-insensitive scheme, case preserved
+    ],
+)
+def test_web_url_accepts_and_normalizes_http_urls(value: str, expected: str) -> None:
+    assert web_url(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "   ",
+        "PLRWvNQVqAeWKt7kCUfEMdJi40m7H58CJd",
+        "http:/example.com",  # single slash - not a real URL scheme prefix
+        "https:",  # scheme only, no slashes
+        "file:///C:/video.mp4",
+        "javascript:alert(1)",
+        b"https://example.com",  # bytes, not str
+        12345,
+    ],
+)
+def test_web_url_rejects_non_web_values(value: object) -> None:
+    assert web_url(value) is None
+
 
 # ---------------------------------------------------------------------------
 # extract_video_id

@@ -6,6 +6,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from yt_dlp.extractor.youtube import YoutubePlaylistIE
+
 from .logging_utils import get_local_timestamp, log_exception
 
 FailedRecord = dict  # keys: key, urls, source, site, title, failed_at, error
@@ -24,6 +26,36 @@ _ENTRY_ERROR_RE = re.compile(
     re.DOTALL,
 )
 _YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v={}"
+_YOUTUBE_PLAYLIST_URL = "https://www.youtube.com/playlist?list={}"
+_UNKNOWN_TITLE = "(unknown title)"
+
+
+def _untitled(ident: str | None) -> str:
+    """
+    Display title for a failure whose real title is unknowable.
+
+    A private/deleted YouTube video's title is withheld everywhere a non-owner can
+    look -- the watch page, the playlist listing (flat entries carry no title), and
+    oEmbed (403) -- so the id is shown marked as such rather than posing as a title.
+    """
+    return f"[Title unavailable] {ident}" if ident else _UNKNOWN_TITLE
+
+
+def _entry_url(ie: str, vid: str) -> str:
+    """
+    Rebuild the canonical URL for an ``[extractor] <id>`` pair from an ERROR line.
+
+    The plain "youtube" extractor's id is a video id. A youtube:tab /
+    youtube:playlist id may be a playlist id - classified by yt-dlp's own
+    playlist-id rule - or a channel id / handle / custom name, which cannot be
+    told apart reliably. Anything unrecognised (including other sites) keeps
+    the bare id rather than inventing a URL that points somewhere else.
+    """
+    if ie == "youtube":
+        return _YOUTUBE_WATCH_URL.format(vid)
+    if ie.startswith("youtube:") and YoutubePlaylistIE.suitable(vid):
+        return _YOUTUBE_PLAYLIST_URL.format(vid)
+    return vid
 
 
 def load_failed_downloads(path: Path) -> list[FailedRecord]:
@@ -132,7 +164,7 @@ class FailureHook:
                 self._buffered[vid] = make_failed_record(
                     urls=[info.get("webpage_url") or info.get("url") or vid],
                     meta=self.meta,
-                    title=info.get("title") or info.get("id") or "(unknown title)",
+                    title=info.get("title") or _untitled(info.get("id")),
                     error=str(
                         d.get("error") or d.get("fragment_error") or "download error",
                     ),
@@ -166,14 +198,12 @@ class FailureHook:
         vid = match.group("vid")
         if vid in self._buffered:
             return
-        # Only the plain "youtube" extractor yields a video id a watch URL can be
-        # rebuilt from; anything else (youtube:tab, a playlist-level error, a
-        # different site) keeps the bare id so no bogus URL is offered for retry.
-        url = _YOUTUBE_WATCH_URL.format(vid) if match.group("ie") == "youtube" else vid
+        # No title is re-fetched here: this line means extraction of the same URL
+        # just failed, and re-extracting it fails the same way.
         self._buffered[vid] = make_failed_record(
-            urls=[url],
+            urls=[_entry_url(match.group("ie"), vid)],
             meta=self.meta,
-            title=vid,
+            title=_untitled(vid),
             error=match.group("reason").strip(),
         )
 
