@@ -4,9 +4,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from src.podcast_filtering import (
     PODCAST_MIN_DURATION_SECONDS,
     _try_parse_datetime,
+    append_downloaded_video_ids,
     append_to_archive_and_mark_skipped,
     check_sponsorblock_for_video_id,
     format_timestamp_readable,
@@ -313,9 +316,8 @@ def test_append_to_archive_and_mark_skipped_deduplication(tmp_path: Path) -> Non
     # Check message was logged
     assert len(messages) == 1
 
-    # Check archive is empty (deduplication worked)
-    content = archive_file.read_text()
-    assert content == ""  # File should not be written to
+    # Nothing new to write, so the archive is never opened (deduplication worked)
+    assert not archive_file.exists()
 
 
 def test_podcast_min_duration_seconds_constant() -> None:
@@ -341,6 +343,55 @@ def test_load_downloaded_video_ids_oserror_returns_empty(tmp_path: Path) -> None
     with patch("pathlib.Path.open", side_effect=OSError("permission denied")):
         result = load_downloaded_video_ids(str(archive_file))
     assert result == set()
+
+
+# ---------------------------------------------------------------------------
+# append_downloaded_video_ids
+# ---------------------------------------------------------------------------
+
+
+def test_append_downloaded_video_ids_drops_falsy_and_duplicates_preserves_order(
+    tmp_path: Path,
+) -> None:
+    archive_file = tmp_path / "archive.txt"
+    written = append_downloaded_video_ids(
+        archive_file, [None, "abc", "", "def", "abc", "def", "ghi"], set()
+    )
+    assert written == ["abc", "def", "ghi"]
+    assert archive_file.read_text() == "youtube abc\nyoutube def\nyoutube ghi\n"
+
+
+def test_append_downloaded_video_ids_loads_existing_ids_when_none_given(
+    tmp_path: Path,
+) -> None:
+    archive_file = tmp_path / "archive.txt"
+    archive_file.write_text("youtube abc\n")
+    written = append_downloaded_video_ids(archive_file, ["abc", "def"])
+    assert written == ["def"]
+    assert archive_file.read_text() == "youtube abc\nyoutube def\n"
+
+
+def test_append_downloaded_video_ids_mutates_given_existing_ids_in_place(
+    tmp_path: Path,
+) -> None:
+    archive_file = tmp_path / "archive.txt"
+    existing_ids = {"abc"}
+    written = append_downloaded_video_ids(archive_file, ["abc", "def"], existing_ids)
+    assert written == ["def"]
+    assert existing_ids == {"abc", "def"}
+
+
+def test_append_downloaded_video_ids_does_not_mutate_existing_ids_on_write_failure(
+    tmp_path: Path,
+) -> None:
+    archive_file = tmp_path / "archive.txt"
+    existing_ids = {"abc"}
+    with (
+        patch("pathlib.Path.open", side_effect=OSError("permission denied")),
+        pytest.raises(OSError, match="permission denied"),
+    ):
+        append_downloaded_video_ids(archive_file, ["def"], existing_ids)
+    assert existing_ids == {"abc"}
 
 
 # ---------------------------------------------------------------------------

@@ -41,7 +41,7 @@ from src.pending_queue import (
     upsert_pending,
 )
 from src.playlist_utils import load_playlist_urls
-from src.podcast_filtering import load_downloaded_video_ids
+from src.podcast_filtering import append_downloaded_video_ids, load_downloaded_video_ids
 from src.resolutions import height_from_source
 from src.ydl_options import build_shared_extraction_opts
 
@@ -216,7 +216,6 @@ class DownloadService:
         self.label_output_set_text_callback("Skipping downloads.")
         qlogger = self.qlogger_factory()
         total_added = 0
-        archive_path = ARCHIVE_PATH
         existing_ids = load_downloaded_video_ids(str(ARCHIVE_PATH))
         for url in urls:
             # Use extract_flat="in_playlist" for playlists, True for single videos
@@ -227,13 +226,14 @@ class DownloadService:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 entries = info.get("entries", [info])
-                with archive_path.open("a", encoding="utf-8") as archive:
-                    for entry in entries:
-                        video_id = entry.get("id")
-                        if video_id and video_id not in existing_ids:
-                            archive.write(f"youtube {video_id}\n")
-                            total_added += 1
-                            qlogger.debug("Added to archive: youtube %(video_id)s")
+            added = append_downloaded_video_ids(
+                ARCHIVE_PATH, [entry.get("id") for entry in entries], existing_ids
+            )
+            total_added += len(added)
+            for video_id in added:
+                # QLogger.debug takes one pre-formatted message, not lazy %-args.
+                message = f"Added to archive: youtube {video_id}"
+                qlogger.debug(message)
         self.label_output_set_text_callback("IDs added to archive.")
         self.bar_progress_set_range_callback(0, 1)
         self.bar_progress_set_value_callback(1)

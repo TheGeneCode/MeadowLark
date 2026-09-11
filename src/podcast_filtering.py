@@ -1,6 +1,7 @@
 """Podcast filtering and categorization helpers for episode processing."""
 
 import re
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,9 @@ from src.config import (
     PODCAST_MIN_DURATION_SECONDS,
 )
 from src.logging_utils import get_local_timestamp
+
+# Extractor key prefixed to each download-archive line ("youtube <video_id>").
+ARCHIVE_EXTRACTOR = "youtube"
 
 
 def parse_video_timestamp(entry: dict[str, Any]) -> float | None:
@@ -79,6 +83,39 @@ def load_downloaded_video_ids(archive_path: str | None) -> set[str]:
     return existing_ids
 
 
+def append_downloaded_video_ids(
+    archive_path: str | Path,
+    video_ids: Iterable[str],
+    existing_ids: set[str] | None = None,
+) -> list[str]:
+    """
+    Append video IDs not already in the download archive, in one write.
+
+    The writer matching load_downloaded_video_ids: each ID becomes a
+    "youtube <video_id>" line, the format yt-dlp's download_archive option checks.
+
+    Args:
+        archive_path: Path to the archive file; created if missing.
+        video_ids: IDs to record. Empty and repeated IDs are dropped, order kept.
+        existing_ids: Already-archived IDs to dedupe against. Loaded from the
+            archive when None; when given, updated in place with the IDs written,
+            so a caller's running set stays in sync across calls.
+
+    Returns:
+        The IDs actually written, in input order.
+
+    Raises:
+        OSError: If the archive cannot be opened or written.
+    """
+    known = load_downloaded_video_ids(str(archive_path)) if existing_ids is None else existing_ids
+    new_ids = list(dict.fromkeys(vid for vid in video_ids if vid and vid not in known))
+    if new_ids:
+        with Path(archive_path).open("a", encoding="utf-8") as archive:
+            archive.writelines(f"{ARCHIVE_EXTRACTOR} {vid}\n" for vid in new_ids)
+        known.update(new_ids)
+    return new_ids
+
+
 def format_timestamp_readable(ts: float | None) -> str:
     """
     Convert timestamp to human-readable date string.
@@ -123,10 +160,7 @@ def append_to_archive_and_mark_skipped(
     """
     if archive_path:
         try:
-            with Path(archive_path).open("a", encoding="utf-8") as f:
-                if vid not in existing_ids:
-                    f.write(f"youtube {vid}\n")
-                    existing_ids.add(vid)
+            append_downloaded_video_ids(archive_path, [vid], existing_ids)
         except OSError as exc:
             utils.log_exception(
                 exc,
@@ -248,6 +282,7 @@ def check_sponsorblock_for_video_id(video_id: str) -> bool:
 __all__ = [
     "HTTP_OK",
     "PODCAST_MIN_DURATION_SECONDS",
+    "append_downloaded_video_ids",
     "append_to_archive_and_mark_skipped",
     "check_sponsorblock_for_video_id",
     "format_timestamp_readable",

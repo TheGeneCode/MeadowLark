@@ -137,6 +137,7 @@ from src.pending_queue import (
 )
 from src.podcast_filtering import (
     PODCAST_MIN_DURATION_SECONDS,
+    append_downloaded_video_ids,
     append_to_archive_and_mark_skipped,
     check_sponsorblock_for_video_id,
     format_timestamp_readable,
@@ -812,9 +813,8 @@ class MyWindow(QWidget):
         self.labelOutput.setText("Skipping downloads.")
         qlogger = QYT.QLogger(self.downloadQueue)
         total_added = 0
-        archive_path = ARCHIVE_PATH
-        # Read existing IDs using centralized function
-        existing_ids = load_downloaded_video_ids(str(archive_path))
+        # One running set across URLs: a video in two dropped playlists is written once.
+        existing_ids = load_downloaded_video_ids(str(ARCHIVE_PATH))
         for url in urls:
             # Use extract_flat="in_playlist" for playlists, True for single videos.
             # extract_video_entries rather than a bare YoutubeDL: it carries the
@@ -825,13 +825,14 @@ class MyWindow(QWidget):
                 extract_flat="in_playlist" if "lists" in source else True,
                 cookiefile=resolve_cookiefile(),
             )
-            with archive_path.open("a", encoding="utf-8") as archive:
-                for entry in entries:
-                    video_id = entry.get("id")
-                    if video_id and video_id not in existing_ids:
-                        archive.write(f"youtube {video_id}\n")
-                        total_added += 1
-                        qlogger.debug("Added to archive: youtube %(video_id)s")
+            added = append_downloaded_video_ids(
+                ARCHIVE_PATH, [entry.get("id") for entry in entries], existing_ids
+            )
+            total_added += len(added)
+            for video_id in added:
+                # QLogger.debug takes one pre-formatted message, not lazy %-args.
+                message = f"Added to archive: youtube {video_id}"
+                qlogger.debug(message)
         self.labelOutput.setText("IDs added to archive.")
         self.barProgress.setRange(0, 1)
         self.barProgress.setValue(1)
@@ -1679,12 +1680,8 @@ class MyWindow(QWidget):
         if not marked:
             return
         try:
-            existing_ids = load_downloaded_video_ids(str(ARCHIVE_PATH))
-            # dict.fromkeys dedupes in order: two records can share one video id.
-            new_ids = list(dict.fromkeys(vid for _, vid in marked if vid not in existing_ids))
-            if new_ids:
-                with ARCHIVE_PATH.open("a", encoding="utf-8") as archive:
-                    archive.writelines(f"youtube {vid}\n" for vid in new_ids)
+            # The helper dedupes too: two records can share one video id.
+            append_downloaded_video_ids(ARCHIVE_PATH, [vid for _, vid in marked])
         except OSError as exc:
             utils.log_exception(exc, "Failed to add videos to archive from Failed Downloads")
             return

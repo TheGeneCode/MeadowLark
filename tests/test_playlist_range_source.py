@@ -200,3 +200,32 @@ def test_archive_only_mode_enumerates_with_cookies_and_shared_wiring(
     assert calls[0]["extract_flat"] == "in_playlist"
     assert calls[0]["cookiefile"]
     assert (tmp_path / "archive.txt").read_text(encoding="utf-8") == "youtube abc123\n"
+
+
+def test_archive_only_mode_writes_a_video_shared_by_two_urls_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A video in two dropped playlists is archived and counted once, not per URL."""
+    entries_by_url = {"u1": [{"id": "shared"}, {"id": "only1"}], "u2": [{"id": "shared"}]}
+    monkeypatch.setattr(
+        meadowlark, "extract_video_entries", lambda url, **_kw: entries_by_url[url]
+    )
+    monkeypatch.setattr(meadowlark, "ARCHIVE_PATH", tmp_path / "archive.txt")
+    debug_lines: list[str] = []
+    monkeypatch.setattr(
+        meadowlark.QYT, "QLogger", lambda _q: SimpleNamespace(debug=debug_lines.append)
+    )
+    log_lines: list[str] = []
+
+    window = _StubWindow()
+    window.downloadQueue = None
+    window.labelOutput = SimpleNamespace(setText=lambda _t: None)
+    window.barProgress = SimpleNamespace(setRange=lambda _a, _b: None, setValue=lambda _v: None)
+    window.logEdit = SimpleNamespace(appendPlainText=log_lines.append)
+    window.handle_queue_empty = lambda: None
+    window.skip_downloading(["u1", "u2"], "1080playlists")
+
+    archive = (tmp_path / "archive.txt").read_text(encoding="utf-8")
+    assert archive == "youtube shared\nyoutube only1\n"
+    assert log_lines == ["Archive-only mode: 2 IDs written."]
+    assert debug_lines == ["Added to archive: youtube shared", "Added to archive: youtube only1"]
