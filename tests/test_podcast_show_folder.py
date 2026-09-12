@@ -21,7 +21,7 @@ from src.pending_queue import (
     save_pending_queue,
 )
 from src.ydl_options import build_podcast_outtmpl, podcast_base_dir
-from tests.test_cache_early_exit import import_vid_module
+from tests._vd_loader import import_vid_module
 
 SHOW = "Android Faithful"
 

@@ -4,7 +4,7 @@ Boundary tests for the two Podcast-Status-window bug fixes.
 BUG 1 — _label_from_comments helper (offline label resolution).
 BUG 2 — _resolve_latest_via_ytdlp hardening + _guarded_status_action guard.
 
-Module-load pattern mirrors test_cache_early_exit.py (importlib shim that
+Module-load pattern mirrors tests/_vd_loader.py (importlib shim that
 stubs out yt_dlp so meadowlark.pyw loads without a real Qt display).
 """
 
@@ -14,7 +14,7 @@ from collections.abc import Callable
 from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
-# Module loader (reuses the exact shim from test_cache_early_exit.py)
+# Module loader (reuses the exact shim from tests/_vd_loader.py)
 # ---------------------------------------------------------------------------
 
 
@@ -118,7 +118,6 @@ def _make_stub_win(vd: types.ModuleType, *, statuses: list[dict] | None = None):
         _podcast_latest_url_cache: dict = {}
         CACHE_TTL_SECONDS = vd.MyWindow.CACHE_TTL_SECONDS
 
-        _cache_get_fresh_entry = vd.MyWindow._cache_get_fresh_entry
         _cache_get_fresh = vd.MyWindow._cache_get_fresh
         _cache_put = vd.MyWindow._cache_put
 
@@ -213,55 +212,6 @@ class TestLabelFromComments:
         url = "https://www.youtube.com/playlist?list=PLempty"
         result = self.vd._label_from_comments(url, {"PLempty": ""})
         assert not result  # "" is falsy — callers' `or fallback` will engage
-
-    # --- Call-site fallback verification: cached branch falls back to url ---
-    # (Regression guard for test_cache_early_exit.py:514)
-
-    def test_cached_branch_falls_back_to_url_when_no_label(
-        self, tmp_path, monkeypatch
-    ) -> None:
-        """
-        Fall back to raw URL as podcast label when _label_from_comments returns None.
-
-        This directly mirrors the assertion at test_cache_early_exit.py:514.
-        """
-        import time
-
-        import src.podcast_filtering as pf
-        import utils as u
-
-        monkeypatch.setattr(u, "load_playlist_comments_for_source", lambda _: {})
-        monkeypatch.setattr(u, "sanitize_for_path", lambda s: s)
-
-        vd = self.vd
-        url = "https://www.youtube.com/playlist?list=PLfallback"
-        vid = "fallback_vid"
-        archive_file = tmp_path / "archive.txt"
-        archive_file.write_text(f"youtube {vid}\n", encoding="utf-8")
-
-        cache = {
-            url: {
-                "latest_url": "http://example.com/fallback",
-                "latest_ts": 0,
-                "fetched_at": time.time(),
-                "video_id": vid,
-            },
-        }
-
-        from tests.test_cache_early_exit import _make_dummy_win
-
-        win = _make_dummy_win(vd, cache=cache)
-
-        with (
-            patch.object(pf, "load_downloaded_video_ids", return_value={vid}),
-            patch.object(vd, "fetch_latest_accessible_entry") as mock_fetch,
-        ):
-            _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(
-                win, [url], {"download_archive": str(archive_file)}
-            )
-
-        mock_fetch.assert_not_called()
-        assert statuses[0]["podcast"] == url  # fallback to raw url
 
 
 # ===========================================================================
@@ -969,7 +919,7 @@ class TestScheduledPremiereStatus:
         monkeypatch.setattr(u, "load_playlist_comments_for_source", lambda _: {})
         monkeypatch.setattr(u, "sanitize_for_path", lambda s: s)
 
-        from tests.test_cache_early_exit import _make_dummy_win
+        from tests._vd_loader import _make_dummy_win
 
         win = _make_dummy_win(vd)
         url = "https://www.youtube.com/playlist?list=PLx"
@@ -1015,7 +965,7 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
     def _run(self, url: str, error: Exception, ydl_opts: dict | None = None):
         """Run _filter_audio_playlist_urls with a fetch that always raises ``error``."""
         import utils as u
-        from tests.test_cache_early_exit import _make_dummy_win
+        from tests._vd_loader import _make_dummy_win
 
         vd = self.vd
         with patch.object(

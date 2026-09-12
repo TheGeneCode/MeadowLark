@@ -179,7 +179,7 @@ class TestPodcastStatusWindowGeometry:
         return _StubWindow()
 
     def test_dialog_reopens_at_last_closed_size(self) -> None:
-        from tests.test_cache_early_exit import import_vid_module
+        from tests._vd_loader import import_vid_module
 
         vd = import_vid_module()
         store: dict = {}
@@ -212,7 +212,7 @@ class TestSaveOpenDialogGeometry:
 
     @staticmethod
     def _method() -> object:
-        from tests.test_cache_early_exit import import_vid_module
+        from tests._vd_loader import import_vid_module
 
         return import_vid_module().MyWindow._save_open_dialog_geometry
 

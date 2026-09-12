@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.pending_queue import KIND_PREMIERE, load_pending_queue
-from tests.test_cache_early_exit import import_vid_module
+from tests._vd_loader import import_vid_module
 
 
 def _make_win(

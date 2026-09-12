@@ -1282,27 +1282,6 @@ class MyWindow(QWidget):
 
         for url in urls:
             try:
-                if archive_path and existing_ids:
-                    cached = self._cache_get_fresh_entry(url)
-                    if cached is not None:
-                        cached_vid = cached.get("video_id")
-                        if cached_vid and cached_vid in existing_ids:
-                            playlist_label = (
-                                _label_from_comments(url, audio_pl_comments) or url
-                            )
-                            status_entry = _make_podcast_status_entry(
-                                playlist_label,
-                                url,
-                                status="Downloaded",
-                                latest_date=format_timestamp_readable(
-                                    cached.get("latest_ts")
-                                ),
-                                latest_url=cached.get("latest_url"),
-                                latest_ts=cached.get("latest_ts"),
-                            )
-                            statuses.append(status_entry)
-                            continue
-
                 entries, skipped, info = fetch_latest_accessible_entry(url)
                 if skipped:
                     messages.append(
@@ -1364,7 +1343,6 @@ class MyWindow(QWidget):
                     url,
                     status_entry.get("latest_url"),
                     status_entry.get("latest_ts"),
-                    video_id=vid,
                 )
                 statuses.append(status_entry)
             except YDL_EXTRACTION_ERRORS as e:
@@ -1725,8 +1703,6 @@ class MyWindow(QWidget):
         playlist_url: str,
         latest_url: str | None,
         latest_ts: int | None,
-        *,
-        video_id: str | None = None,
     ) -> None:
         """Store or update a cache entry for a podcast's latest URL."""
         if not playlist_url or not latest_url:
@@ -1735,7 +1711,6 @@ class MyWindow(QWidget):
             "latest_url": latest_url,
             "latest_ts": latest_ts,
             "fetched_at": time.time(),
-            "video_id": video_id,
         }
 
     def _cache_get_fresh(self, playlist_url: str) -> str | None:
@@ -1747,15 +1722,6 @@ class MyWindow(QWidget):
         if (time.time() - entry.get("fetched_at", 0)) > self.CACHE_TTL_SECONDS:
             return None
         return entry.get("latest_url")
-
-    def _cache_get_fresh_entry(self, playlist_url: str) -> dict | None:
-        """Return the raw cache dict for playlist_url if present and within TTL."""
-        entry = self._podcast_latest_url_cache.get(playlist_url)
-        if not entry:
-            return None
-        if (time.time() - entry.get("fetched_at", 0)) > self.CACHE_TTL_SECONDS:
-            return None
-        return entry
 
     def _on_podcast_status_context_menu(self, pos: QPoint) -> None:
         """Handle right-click context menu on Podcast Status table."""

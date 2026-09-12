@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tests.test_cache_early_exit import _make_dummy_win, import_vid_module
+from tests._vd_loader import _make_dummy_win, import_vid_module
 
 LATEST_TS = 1700000000  # 2023-11-14 22:13:20 UTC
 LATEST_DATE = "2023-11-14"
@@ -107,31 +107,39 @@ def test_undated_entry_reads_unknown(vd, monkeypatch, tmp_path):
     assert status["latest_date"] == "(unknown)"
 
 
-def test_cache_early_exit_row_carries_latest_date(vd, monkeypatch, tmp_path):
-    def _no_network(_url):
-        raise AssertionError("network")
+def test_filter_ignores_fresh_cache_entry_and_always_calls_fetch(vd, monkeypatch, tmp_path):
+    """
+    Cache-based early exit was removed (BACKLOG #10).
 
-    monkeypatch.setattr(vd, "fetch_latest_accessible_entry", _no_network)
-    cache = {
-        URL: {
-            "latest_url": "https://www.youtube.com/watch?v=vid_latest",
-            "latest_ts": LATEST_TS,
-            "fetched_at": time.time(),
-            "video_id": "vid_latest",
-        }
-    }
+    A fresh (non-stale) pre-existing cache entry for the playlist URL must not
+    skip the ``fetch_latest_accessible_entry`` call - every check now goes to
+    yt-dlp, matching the hourly-check UI promise.
+    """
     monkeypatch.setattr("QYT.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
     monkeypatch.setattr("utils.load_playlist_comments_for_source", lambda _source: {})
     archive = tmp_path / "archive.txt"
-    archive.write_text("youtube vid_latest\n", encoding="utf-8")
-    win = _make_dummy_win(vd, cache=cache)
+    archive.write_text("", encoding="utf-8")
+    entry = _entry()
+    calls: list[str] = []
+
+    def fake_fetch(url: str):
+        calls.append(url)
+        return [entry], False, {}
+
+    monkeypatch.setattr(vd, "fetch_latest_accessible_entry", fake_fetch)
+    fresh_cache = {
+        URL: {
+            "latest_url": entry["webpage_url"],
+            "latest_ts": LATEST_TS,
+            "fetched_at": time.time(),
+        }
+    }
+    win = _make_dummy_win(vd, cache=fresh_cache)
     _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(
         win, [URL], {"download_archive": str(archive)}
     )
+    assert calls == [URL]
     assert len(statuses) == 1
-    status = statuses[0]
-    assert status["status"] == "Downloaded"
-    assert status["latest_date"] == LATEST_DATE
 
 
 def test_classify_ts_none_ready_does_not_overwrite_callers_unknown_date(vd):
@@ -160,28 +168,3 @@ def test_classify_ts_none_ready_does_not_overwrite_callers_unknown_date(vd):
     assert to_download == [
         {"url": "https://example.com/watch?v=vid1", "playlist": "My Podcast"}
     ]
-
-
-def test_cache_early_exit_row_without_ts_reads_unknown(vd, monkeypatch, tmp_path):
-    def _no_network(_url):
-        raise AssertionError("network")
-
-    monkeypatch.setattr(vd, "fetch_latest_accessible_entry", _no_network)
-    cache = {
-        URL: {
-            "latest_url": "https://www.youtube.com/watch?v=vid_latest",
-            "latest_ts": None,
-            "fetched_at": time.time(),
-            "video_id": "vid_latest",
-        }
-    }
-    monkeypatch.setattr("QYT.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
-    monkeypatch.setattr("utils.load_playlist_comments_for_source", lambda _source: {})
-    archive = tmp_path / "archive.txt"
-    archive.write_text("youtube vid_latest\n", encoding="utf-8")
-    win = _make_dummy_win(vd, cache=cache)
-    _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(
-        win, [URL], {"download_archive": str(archive)}
-    )
-    assert len(statuses) == 1
-    assert statuses[0]["latest_date"] == "(unknown)"

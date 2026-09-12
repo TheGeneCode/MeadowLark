@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.pending_queue import save_pending_queue
-from tests.test_cache_early_exit import import_vid_module
+from tests._vd_loader import import_vid_module
 
 
 class _FakeSignal:

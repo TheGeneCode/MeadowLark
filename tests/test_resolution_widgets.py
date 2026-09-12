@@ -6,7 +6,7 @@ _populate_resolution_grid, the reload_settings rebuild trigger, and the
 enabled-heights fallback in _download_pending_now.
 
 Critical: `enabled_heights` must be patched on the executed meadowlark module
-object (here bound to the name `vd`, via tests.test_cache_early_exit.import_vid_module),
+object (here bound to the name `vd`, via tests._vd_loader.import_vid_module),
 not on `src.settings_dialog.enabled_heights` -- patching the latter has no effect
 once meadowlark.pyw has already imported the name into its own namespace.
 """
@@ -19,7 +19,7 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from tests.test_cache_early_exit import import_vid_module
+from tests._vd_loader import import_vid_module
 
 # Ensure QApplication exists for Qt testing
 _app = QApplication.instance() or QApplication([])

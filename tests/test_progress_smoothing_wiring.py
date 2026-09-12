@@ -9,7 +9,7 @@ MAX_INT_PROGRESS clamp for huge totals, the early returns for "finished"/unknown
 and handle_queue_empty resetting the smoother before touching the podcast indicator.
 """
 
-from tests.test_cache_early_exit import import_vid_module
+from tests._vd_loader import import_vid_module
 
 
 class _LabelRecorder:
