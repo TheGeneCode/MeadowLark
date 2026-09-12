@@ -1228,7 +1228,6 @@ class MyWindow(QWidget):
             to_download.append(obj)
             status_entry["status"] = "Ready"
             return
-        status_entry["latest_date"] = format_timestamp_readable(ts)
         if ts > now_ts:
             status_entry["status"] = "Upcoming"
             status_entry["recheck_ts"] = ts
@@ -1295,6 +1294,9 @@ class MyWindow(QWidget):
                                 playlist_label,
                                 url,
                                 status="Downloaded",
+                                latest_date=format_timestamp_readable(
+                                    cached.get("latest_ts")
+                                ),
                                 latest_url=cached.get("latest_url"),
                                 latest_ts=cached.get("latest_ts"),
                             )
@@ -1317,8 +1319,10 @@ class MyWindow(QWidget):
                     webpage = entry.get("webpage_url") or entry.get("url")
                     if not vid or not webpage:
                         continue
+                    ts = parse_video_timestamp(entry)
                     status_entry["latest_url"] = webpage
-                    status_entry["latest_ts"] = parse_video_timestamp(entry)
+                    status_entry["latest_ts"] = ts
+                    status_entry["latest_date"] = format_timestamp_readable(ts)
 
                     if self._episode_already_archived(vid, existing_ids, status_entry):
                         break
@@ -1343,7 +1347,6 @@ class MyWindow(QWidget):
                     ):
                         break
 
-                    ts = parse_video_timestamp(entry)
                     self._classify_episode_by_age(
                         vid,
                         webpage,
