@@ -11,19 +11,17 @@ used -- otherwise the episode lands in the "misc" directory that
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import src.settings_dialog as sd
 from src.path_utils import sanitize_for_path
 from src.pending_queue import (
-    KIND_LIVE,
     load_pending_queue,
     make_pending_record,
     save_pending_queue,
 )
 from src.ydl_options import build_podcast_outtmpl, podcast_base_dir
 from tests.test_cache_early_exit import import_vid_module
-from tests.test_download_service import make_service
 
 SHOW = "Android Faithful"
 
@@ -120,115 +118,8 @@ def test_pending_queue_round_trips_show_label(tmp_path: Path) -> None:
     assert loaded[0]["label"] == SHOW
 
 
-def test_add_to_live_queue_stores_label(tmp_path: Path) -> None:
-    """The label passed at queue time is persisted with the entry."""
-    path = tmp_path / "pending_queue.json"
-    service = make_service()
-    service.pending_queue_path = path
-
-    service.add_to_live_queue("https://yt.com/watch?v=abc", "audio_playlists", None, SHOW)
-
-    records = load_pending_queue(path)
-    assert len(records) == 1
-    assert records[0]["source"] == "audio_playlists"
-    assert records[0]["label"] == SHOW
-    assert records[0]["kind"] == KIND_LIVE
-
-
 # ---------------------------------------------------------------------------
 # Re-queue from the pending queue must restore the show folder
-# ---------------------------------------------------------------------------
-
-
-@patch("src.download_service.yt_dlp.YoutubeDL")
-@patch("src.download_service.utils.load_playlist_comments_for_source", return_value={})
-@patch("src.download_service.utils.detect_site_from_urls", return_value="youtube")
-@patch(
-    "src.download_service.utils.build_base_ydl_opts",
-    return_value={"logger": None, "progress_hooks": []},
-)
-def test_check_pending_queue_restores_show_folder_for_podcast(
-    mock_build_base,
-    mock_detect_site,
-    mock_load_comments,
-    mock_ydl_class,
-    tmp_path: Path,
-) -> None:
-    """An ended podcast livestream is re-queued into its show folder, not misc."""
-    path = tmp_path / "pending_queue.json"
-    save_pending_queue(
-        path,
-        [
-            make_pending_record(
-                "https://youtube.com/watch?v=ended", "audio_playlists", label=SHOW
-            )
-        ],
-    )
-
-    queue = MagicMock()
-    service = make_service(
-        download_queue=queue,
-        qhook_factory=lambda: MagicMock(info_changed=MagicMock()),
-        qlogger_factory=lambda: MagicMock(message_changed=MagicMock()),
-        bar_progress_set_range_callback=Mock(),
-        handle_info_changed_callback=Mock(),
-        handle_log_entry_callback=Mock(),
-    )
-    service.pending_queue_path = path
-
-    mock_instance = MagicMock()
-    mock_instance.extract_info.return_value = {"is_live": False, "live_status": None}
-    mock_ydl_class.return_value.__enter__.return_value = mock_instance
-
-    service.check_pending_queue()
-
-    _urls, queued_opts = queue.put.call_args[0][0]
-    assert queued_opts["outtmpl"] == build_podcast_outtmpl(SHOW)
-
-
-@patch("src.download_service.yt_dlp.YoutubeDL")
-@patch("src.download_service.utils.load_playlist_comments_for_source", return_value={})
-@patch("src.download_service.utils.detect_site_from_urls", return_value="youtube")
-@patch(
-    "src.download_service.utils.build_base_ydl_opts",
-    return_value={"logger": None, "progress_hooks": []},
-)
-def test_check_pending_queue_leaves_video_outtmpl_untouched(
-    mock_build_base,
-    mock_detect_site,
-    mock_load_comments,
-    mock_ydl_class,
-    tmp_path: Path,
-) -> None:
-    """Video sources keep their own %(playlist)s template; only podcasts are relabelled."""
-    path = tmp_path / "pending_queue.json"
-    save_pending_queue(
-        path, [make_pending_record("https://youtube.com/watch?v=ended", "1080playlists")]
-    )
-
-    queue = MagicMock()
-    service = make_service(
-        download_queue=queue,
-        qhook_factory=lambda: MagicMock(info_changed=MagicMock()),
-        qlogger_factory=lambda: MagicMock(message_changed=MagicMock()),
-        bar_progress_set_range_callback=Mock(),
-        handle_info_changed_callback=Mock(),
-        handle_log_entry_callback=Mock(),
-    )
-    service.pending_queue_path = path
-
-    mock_instance = MagicMock()
-    mock_instance.extract_info.return_value = {"is_live": False, "live_status": None}
-    mock_ydl_class.return_value.__enter__.return_value = mock_instance
-
-    service.check_pending_queue()
-
-    _urls, queued_opts = queue.put.call_args[0][0]
-    assert "%(playlist)s" in queued_opts["outtmpl"]
-
-
-# ---------------------------------------------------------------------------
-# The label reaches the pending queue in the first place
 # ---------------------------------------------------------------------------
 
 
@@ -328,32 +219,6 @@ def test_grouped_podcast_batch_binds_show_label_to_match_filter(
         False,
     )
     records = {r["url"]: r for r in load_pending_queue(DummyWin.pending_queue_path)}
-    parked = records["https://youtube.com/watch?v=live"]
-    assert (parked["source"], parked["playlist_id"], parked["label"]) == (
-        "audio_playlists",
-        None,
-        SHOW,
-    )
-
-
-def test_match_filter_records_show_label_for_live_episode(tmp_path: Path) -> None:
-    """A live podcast episode is parked in the queue together with its show label."""
-    path = tmp_path / "pending_queue.json"
-    service = make_service()
-    service.pending_queue_path = path
-    service.add_to_live_queue_callback = service.add_to_live_queue
-
-    match_filter = service.make_match_filter("audio_playlists", label=SHOW)
-    match_filter(
-        {
-            "is_live": True,
-            "live_status": "is_live",
-            "webpage_url": "https://youtube.com/watch?v=live",
-        },
-        False,
-    )
-
-    records = {r["url"]: r for r in load_pending_queue(path)}
     parked = records["https://youtube.com/watch?v=live"]
     assert (parked["source"], parked["playlist_id"], parked["label"]) == (
         "audio_playlists",

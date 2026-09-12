@@ -258,6 +258,27 @@ def test_audio_playlists_uses_podcast_outtmpl_from_label(tmp_path: Path) -> None
     assert opts["outtmpl"] == build_podcast_outtmpl("My Show")
 
 
+def test_non_podcast_source_keeps_get_options_outtmpl(tmp_path: Path) -> None:
+    """A video source's own %(playlist)s template must survive re-queueing untouched."""
+    path = tmp_path / "pending_queue.json"
+    seed(path, make_pending_record("https://yt.com/watch?v=x", "1080playlists"))
+    enqueue = Mock()
+    deps = make_deps(
+        tmp_path,
+        path=path,
+        enqueue=enqueue,
+        get_options=lambda _urls, _source: {
+            "outtmpl": "/videos/%(playlist)s/%(title)s.%(ext)s"
+        },
+        ydl_class=make_ydl_class(const({"live_status": "was_live"})),
+    )
+
+    check_pending_queue(deps)
+
+    _urls, opts = enqueue.call_args[0]
+    assert opts["outtmpl"] == "/videos/%(playlist)s/%(title)s.%(ext)s"
+
+
 def test_playlist_comments_added_only_when_playlist_id_present(tmp_path: Path) -> None:
     path_with = tmp_path / "with.json"
     seed(

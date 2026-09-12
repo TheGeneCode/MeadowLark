@@ -1,15 +1,12 @@
-"""Tests for src.playlist_utils.load_playlist_urls and the _load_playlist_utils wrapper."""
+"""Tests for src.playlist_utils.load_playlist_urls and related helpers."""
 
 import stat
 import sys
 from pathlib import Path
-from queue import Queue
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from src import download_service as _ds
-from src.download_service import DownloadService
 from src.playlist_utils import (
     get_playlist_file_for_source,
     is_primitive_technology,
@@ -174,85 +171,6 @@ def test_load_playlist_urls_large_file_returns_all_urls(tmp_path: Path) -> None:
     result = load_playlist_urls(f)
     assert result == urls
     assert len(result) == 5000
-
-
-# ---------------------------------------------------------------------------
-# _load_playlist_urls wrapper contract tests (rows 18-22)
-# Tests access the private method deliberately to verify the None-vs-[]
-# contract that the request_detected caller depends on.
-# ---------------------------------------------------------------------------
-
-
-def _make_service() -> DownloadService:
-    """Build a minimal DownloadService with all callbacks stubbed."""
-    return DownloadService(
-        download_queue=Queue(),
-        ignore_archive_callback=MagicMock(return_value=False),
-        skip_download_callback=MagicMock(return_value=False),
-        label_output_set_text_callback=MagicMock(),
-        log_edit_append_callback=MagicMock(),
-        bar_progress_set_range_callback=MagicMock(),
-        bar_progress_set_value_callback=MagicMock(),
-        handle_info_changed_callback=MagicMock(),
-        handle_log_entry_callback=MagicMock(),
-        handle_queue_empty_callback=MagicMock(),
-        do_updates_callback=MagicMock(),
-        add_to_live_queue_callback=MagicMock(),
-        qhook_factory=MagicMock(),
-        qlogger_factory=MagicMock(),
-    )
-
-
-def test_load_playlist_urls_wrapper_unknown_source_returns_none() -> None:
-    """Row 20 - an unrecognised source must return None (not [])."""
-    svc = _make_service()
-    assert svc._load_playlist_urls("not_a_real_source") is None
-
-
-def test_load_playlist_urls_wrapper_known_source_missing_file_returns_none(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Row 21 - known source whose playlist file does not exist must return None."""
-    monkeypatch.setattr(
-        _ds, "playlist_path_for_height", lambda _height: tmp_path / "nonexistent.txt"
-    )
-    svc = _make_service()
-    assert svc._load_playlist_urls("1080playlists") is None
-
-
-def test_load_playlist_urls_wrapper_known_source_empty_file_returns_none(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """
-    Row 18 - known source whose playlist file is empty must return None (not []).
-
-    The wrapper uses `load_playlist_urls(...) or None` which converts [] to None.
-    This test verifies that contract holds so request_detected treats empty files
-    the same as missing files (does not overwrite urls with an empty list).
-    """
-    f = tmp_path / "playlists.txt"
-    f.write_text("")
-    monkeypatch.setattr(_ds, "playlist_path_for_height", lambda _height: f)
-    svc = _make_service()
-    result = svc._load_playlist_urls("1080playlists")
-    assert result is None, (
-        "Empty playlist file must yield None, not [], to satisfy caller contract"
-    )
-
-
-def test_load_playlist_urls_wrapper_known_source_with_urls_returns_list(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Row 19 - known source with URLs in file must return a non-empty list."""
-    f = tmp_path / "playlists.txt"
-    f.write_text("https://youtube.com/playlist?list=PLabc\n")
-    monkeypatch.setattr(_ds, "playlist_path_for_height", lambda _height: f)
-    svc = _make_service()
-    result = svc._load_playlist_urls("1080playlists")
-    assert result == ["https://youtube.com/playlist?list=PLabc"]
 
 
 # ---------------------------------------------------------------------------
@@ -462,21 +380,3 @@ def test_write_template_playlist_file_embedded_null_byte_raises_valueerror(
 
     with pytest.raises(ValueError, match="null"):
         write_template_playlist_file(bad_path)
-
-
-def test_request_detected_skips_file_load_when_urls_provided(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Row 22 - if urls are already supplied, _load_playlist_urls must not be called."""
-    monkeypatch.setattr(
-        _ds, "playlist_path_for_height", lambda _height: tmp_path / "nonexistent.txt"
-    )
-
-    svc = _make_service()
-    svc._load_playlist_urls = MagicMock(return_value=None)  # type: ignore[method-assign]
-    svc.get_options = MagicMock(return_value=None)  # short-circuit after the load guard
-
-    svc.request_detected(["https://youtube.com/watch?v=abc"], "1080playlists")
-
-    svc._load_playlist_urls.assert_not_called()
