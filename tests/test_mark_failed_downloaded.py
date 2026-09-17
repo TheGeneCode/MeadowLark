@@ -170,6 +170,79 @@ def test_retry_never_sends_empty_urls() -> None:
     win._delete_failed_downloads.assert_not_called()
 
 
+# --- _on_history_entry_added / _clear_resolved_failures wiring ---
+
+
+def test_history_success_clears_matching_failure(tmp_path: Path) -> None:
+    from src.failed_downloads import add_failed_download
+
+    store = tmp_path / "fd.json"
+    record = _record(key="k1", urls=["https://youtu.be/abc123"])
+    add_failed_download(store, record)
+    win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
+
+    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+        win._on_history_entry_added({"result": "SUCCESS", "url": "https://youtu.be/abc123"})
+
+    win._delete_failed_downloads.assert_called_once_with(["k1"])
+
+
+def test_history_fail_entry_does_not_clear(tmp_path: Path) -> None:
+    from src.failed_downloads import add_failed_download
+
+    store = tmp_path / "fd.json"
+    add_failed_download(store, _record(key="k1", urls=["https://youtu.be/abc123"]))
+    win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
+
+    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+        win._on_history_entry_added({"result": "FAIL", "url": "https://youtu.be/abc123"})
+
+    win._delete_failed_downloads.assert_not_called()
+
+
+def test_history_success_no_match_no_refresh(tmp_path: Path) -> None:
+    from src.failed_downloads import add_failed_download
+
+    store = tmp_path / "fd.json"
+    add_failed_download(store, _record(key="k1", urls=["https://youtu.be/abc123"]))
+    win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
+
+    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+        win._on_history_entry_added(
+            {"result": "SUCCESS", "url": "https://www.youtube.com/watch?v=other"}
+        )
+
+    win._delete_failed_downloads.assert_not_called()
+
+
+def test_history_success_empty_store(tmp_path: Path) -> None:
+    store = tmp_path / "does-not-exist.json"
+    win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
+
+    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+        win._on_history_entry_added({"result": "SUCCESS", "url": "https://youtu.be/abc123"})
+
+    win._delete_failed_downloads.assert_not_called()
+
+
+def test_clear_resolved_failures_oserror_logged_and_swallowed(tmp_path: Path) -> None:
+    """The store's OSError must never escape the Qt slot (would abort the interpreter)."""
+    from src.failed_downloads import add_failed_download
+
+    store = tmp_path / "fd.json"
+    add_failed_download(store, _record(key="k1", urls=["https://youtu.be/abc123"]))
+    win = _make_window("_clear_resolved_failures")
+    win._delete_failed_downloads.side_effect = OSError("disk full")
+
+    with (
+        patch("meadowlark.FAILED_DOWNLOADS_FILE", store),
+        patch("meadowlark.utils.log_exception") as mock_log_exception,
+    ):
+        win._clear_resolved_failures("https://youtu.be/abc123")
+
+    mock_log_exception.assert_called_once()
+
+
 def test_delete_batch_one_write_one_refresh(tmp_path: Path) -> None:
     from src.failed_downloads import add_failed_download
 

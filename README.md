@@ -250,7 +250,7 @@ You can view recent history inside the app via the **History** menu item (if ava
 
 When a download fails, MeadowLark records it instead of letting it scroll past in the log. A red **⚠ N** button appears in the top-right corner showing how many failures are waiting; it is hidden entirely when there are none.
 
-Click it to open the **Failed Downloads** window, a list of every failed item with the time it failed, the site, the download type (the resolution preset, audio, or playlist), and the title. Hover any row to see the error message that caused the failure.
+Click it to open the **Failed Downloads** window, a list of every failed item with the time it failed, the site, the download type (the resolution preset, audio, or playlist), and the title. Hover any row to see the error message that caused the failure. An item also leaves the list by itself as soon as that video downloads successfully (from a retry, a playlist scan, or dropping it again).
 
 Select one or more rows (Ctrl-click, Shift-click, or Ctrl+A for all) and use — each action applies to every selected row, skipping any it can't handle:
 

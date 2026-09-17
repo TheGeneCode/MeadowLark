@@ -128,6 +128,30 @@ def record_video_id(record: FailedRecord | None) -> str | None:
     return extract_video_id(urls[0])
 
 
+def keys_resolved_by_download(records: Iterable[FailedRecord], url: str | None) -> list[str]:
+    """
+    Return keys of failed records that a successful download of *url* resolves.
+
+    Only single-URL records are eligible: a multi-URL batch record failed as a
+    whole, and one entry succeeding says nothing about the rest. A record
+    matches on exact URL, or on YouTube video id so youtu.be / watch / extra
+    query-param spellings of one video resolve each other.
+    """
+    if not isinstance(url, str) or not url.strip():
+        return []
+    url = url.strip()
+    vid = extract_video_id(url)
+    keys: list[str] = []
+    for record in records:
+        key = record.get("key")
+        urls = record.get("urls")
+        if not (isinstance(key, str) and key and isinstance(urls, list) and len(urls) == 1):
+            continue
+        if urls[0] == url or (vid is not None and record_video_id(record) == vid):
+            keys.append(key)
+    return keys
+
+
 def make_failed_record(
     urls: list,
     meta: dict | None,

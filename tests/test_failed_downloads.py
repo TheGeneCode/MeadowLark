@@ -13,6 +13,7 @@ from src.failed_downloads import (
     ErrorCapturingLogger,
     FailureHook,
     add_failed_download,
+    keys_resolved_by_download,
     load_failed_downloads,
     make_failed_record,
     record_video_id,
@@ -742,6 +743,62 @@ def test_log_error_line_is_discarded_after_merger_postprocessing() -> None:
     hook.flush()
 
     assert captured == []
+
+
+# --- keys_resolved_by_download ---
+
+
+def test_resolved_exact_url_match() -> None:
+    record = make_failed_record(["https://nebula.tv/videos/x"], _META, "T", "e")
+    assert keys_resolved_by_download([record], "https://nebula.tv/videos/x") == [record["key"]]
+
+
+def test_resolved_by_video_id_across_spellings() -> None:
+    record = make_failed_record(["https://youtu.be/abc123"], _META, "T", "e")
+    assert keys_resolved_by_download(
+        [record], "https://www.youtube.com/watch?v=abc123"
+    ) == [record["key"]]
+
+
+def test_resolved_ignores_multi_url_records() -> None:
+    record = make_failed_record(
+        [
+            "https://www.youtube.com/watch?v=abc123",
+            "https://www.youtube.com/watch?v=def456",
+        ],
+        _META,
+        "T",
+        "e",
+    )
+    assert keys_resolved_by_download([record], "https://www.youtube.com/watch?v=abc123") == []
+
+
+def test_resolved_ignores_playlist_record() -> None:
+    record = make_failed_record(["https://www.youtube.com/playlist?list=PLx"], _META, "T", "e")
+    assert keys_resolved_by_download([record], "https://www.youtube.com/watch?v=abc123") == []
+
+
+@pytest.mark.parametrize("url", [None, "  "])
+def test_resolved_none_or_blank_url(url: str | None) -> None:
+    record = make_failed_record(["https://www.youtube.com/watch?v=abc123"], _META, "T", "e")
+    assert keys_resolved_by_download([record], url) == []
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"key": None, "urls": ["https://www.youtube.com/watch?v=abc123"]},
+        {"key": "k", "urls": "https://www.youtube.com/watch?v=abc123"},
+        {"key": ["x"], "urls": ["https://www.youtube.com/watch?v=abc123"]},
+    ],
+)
+def test_resolved_skips_malformed_records(record: dict) -> None:
+    assert keys_resolved_by_download([record], "https://www.youtube.com/watch?v=abc123") == []
+
+
+def test_resolved_different_video_no_match() -> None:
+    record = make_failed_record(["https://www.youtube.com/watch?v=abc123"], _META, "T", "e")
+    assert keys_resolved_by_download([record], "https://www.youtube.com/watch?v=zzz999") == []
 
 
 def test_error_capturing_logger_tees_and_delegates() -> None:

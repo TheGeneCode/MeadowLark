@@ -113,6 +113,7 @@ from src.config import (
 )
 from src.failed_downloads import (
     add_failed_download,
+    keys_resolved_by_download,
     load_failed_downloads,
     record_video_id,
     remove_failed_downloads,
@@ -1694,6 +1695,18 @@ class MyWindow(QWidget):
         dialog = getattr(self, "_history_dialog", None)
         if dialog and dialog.isVisible():
             dialog.prepend_row(record)
+        if record.get("result") == "SUCCESS":
+            self._clear_resolved_failures(record.get("url"))
+
+    def _clear_resolved_failures(self, url: str | None) -> None:
+        """Drop failed-download records that a successful download just resolved."""
+        try:
+            keys = keys_resolved_by_download(load_failed_downloads(FAILED_DOWNLOADS_FILE), url)
+            if keys:
+                self._delete_failed_downloads(keys)
+        except OSError as exc:
+            # An exception escaping a Qt slot aborts the interpreter.
+            utils.log_exception(exc, "Failed to clear resolved failed downloads")
 
     # Cache TTL: 6 hours
     CACHE_TTL_SECONDS = 6 * 60 * 60
