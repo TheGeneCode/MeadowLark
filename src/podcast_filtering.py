@@ -2,11 +2,12 @@
 
 import re
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import Any
 
 import requests
+from genekit.tz import format_timestamp
 
 import utils
 from src.config import (
@@ -116,24 +117,24 @@ def append_downloaded_video_ids(
     return new_ids
 
 
-def format_timestamp_readable(ts: float | None) -> str:
+def format_timestamp_readable(ts: float | None, *, tz: tzinfo | None = None) -> str:
     """
-    Convert timestamp to human-readable date string.
+    Convert timestamp to a human-readable date string in the viewer's local timezone.
+
+    Thin shim over ``genekit.tz.format_timestamp``, kept so call sites and the app's
+    "(unknown)" placeholder stay put. The library owns the epoch-to-local conversion and
+    the missing/unrepresentable-value policy.
 
     Args:
         ts: Timestamp as float (seconds since epoch), or None.
+        tz: Timezone to render the date in; defaults to the system's local
+            timezone so the displayed date matches the viewer's calendar day
+            rather than the UTC calendar day.
 
     Returns:
         Formatted date string like "2025-03-24", or "(unknown)" if ts is None.
     """
-    if ts is None:
-        return "(unknown)"
-    try:
-        dt = datetime.fromtimestamp(ts, tz=UTC)
-        return dt.strftime("%Y-%m-%d")
-    except (OSError, ValueError) as exc:
-        utils.log_exception(exc, f"format_timestamp_readable: invalid timestamp {ts}")
-        return "(unknown)"
+    return format_timestamp(ts, tz, fmt="%Y-%m-%d", default="(unknown)")
 
 
 def append_to_archive_and_mark_skipped(

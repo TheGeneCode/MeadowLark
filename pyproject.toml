@@ -82,4 +82,4 @@ ignore = [
 "scripts/**" = ["INP001"]
 
 [tool.uv.sources]
-genekit = { git = "https://github.com/TheGeneCode/genekit", subdirectory = "python", tag = "py-v0.2.2" }
+genekit = { git = "https://github.com/TheGeneCode/genekit", subdirectory = "python", tag = "py-v0.3.1" }

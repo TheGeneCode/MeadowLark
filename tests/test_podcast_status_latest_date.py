@@ -12,8 +12,14 @@ import pytest
 
 from tests._vd_loader import _make_dummy_win, import_vid_module
 
+
+def _expected_local_date(ts: float) -> str:
+    """Mirror format_timestamp_readable's UTC-instant-to-local-calendar-day conversion."""
+    return datetime.fromtimestamp(ts, tz=UTC).astimezone().strftime("%Y-%m-%d")
+
+
 LATEST_TS = 1700000000  # 2023-11-14 22:13:20 UTC
-LATEST_DATE = "2023-11-14"
+LATEST_DATE = _expected_local_date(LATEST_TS)
 URL = "https://www.youtube.com/playlist?list=PLlatestdate"
 
 
@@ -78,7 +84,7 @@ def test_upcoming_row_carries_future_date(vd, monkeypatch, tmp_path):
     future_ts = time.time() + 3 * 86400
     status = _run(vd, monkeypatch, tmp_path, _entry(timestamp=future_ts))
     assert status["status"] == "Upcoming"
-    expected_date = datetime.fromtimestamp(future_ts, tz=UTC).strftime("%Y-%m-%d")
+    expected_date = _expected_local_date(future_ts)
     assert status["latest_date"] == expected_date
     assert "recheck_ts" in status
 
@@ -92,7 +98,8 @@ def test_upload_date_only_entry_is_dated(vd, monkeypatch, tmp_path):
         archived_ids=("vid_latest",),
     )
     assert status["status"] == "Downloaded"
-    assert status["latest_date"] == "2026-09-10"
+    upload_date_ts = datetime(2026, 9, 10, tzinfo=UTC).timestamp()
+    assert status["latest_date"] == _expected_local_date(upload_date_ts)
 
 
 def test_undated_entry_reads_unknown(vd, monkeypatch, tmp_path):

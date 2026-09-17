@@ -1,6 +1,7 @@
 """Unit tests for podcast_filtering helpers."""
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -45,7 +46,36 @@ def test_format_timestamp_readable_unknown() -> None:
 
 def test_format_timestamp_readable_valid() -> None:
     ts = datetime(2024, 3, 1, tzinfo=UTC).timestamp()
-    assert format_timestamp_readable(ts) == "2024-03-01"
+    assert format_timestamp_readable(ts, tz=UTC) == "2024-03-01"
+
+
+def test_format_timestamp_readable_uses_local_timezone_not_utc() -> None:
+    """
+    Regression: an episode published late in the viewer's local day.
+
+    Once past midnight UTC, it must render as the viewer's local calendar date -
+    not the UTC date, which is already one day ahead ("tomorrow" in the
+    Podcast Status window).
+    """
+    local_tz = timezone(timedelta(hours=-5))
+    ts = datetime(2026, 9, 16, 23, 30, tzinfo=local_tz).timestamp()
+    assert datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d") == "2026-09-17"
+    assert format_timestamp_readable(ts, tz=local_tz) == "2026-09-16"
+
+
+def test_format_timestamp_readable_non_whole_hour_offset_crosses_calendar_day() -> None:
+    """A +5:30 offset (e.g. IST) must roll the date forward using true minute math."""
+    ist = timezone(timedelta(hours=5, minutes=30))
+    ts = datetime(2026, 9, 16, 23, 45, tzinfo=UTC).timestamp()
+    assert format_timestamp_readable(ts, tz=UTC) == "2026-09-16"
+    assert format_timestamp_readable(ts, tz=ist) == "2026-09-17"
+
+
+def test_format_timestamp_readable_default_tz_returns_valid_date_string() -> None:
+    """Tz omitted (production call site) must still return a well-formed date, not crash."""
+    ts = datetime(2024, 3, 1, tzinfo=UTC).timestamp()
+    result = format_timestamp_readable(ts)
+    assert re.match(r"^\d{4}-\d{2}-\d{2}$", result)
 
 
 def test_load_downloaded_video_ids_none_path() -> None:
@@ -395,22 +425,19 @@ def test_append_downloaded_video_ids_does_not_mutate_existing_ids_on_write_failu
 
 
 # ---------------------------------------------------------------------------
-# format_timestamp_readable — OSError/ValueError branch (lines 97-98)
+# format_timestamp_readable — unrepresentable-timestamp branch
 # ---------------------------------------------------------------------------
+# Driven with real values rather than by patching the module's internals: the
+# conversion now lives in genekit.tz, so patching a name in this module would
+# test nothing. Both values are out of range on every supported platform.
 
 
-def test_format_timestamp_readable_oserror_returns_unknown() -> None:
-    with patch("src.podcast_filtering.datetime") as mock_dt:
-        mock_dt.fromtimestamp.side_effect = OSError("invalid ts")
-        result = format_timestamp_readable(12345.0)
-    assert result == "(unknown)"
+def test_format_timestamp_readable_out_of_range_returns_unknown() -> None:
+    assert format_timestamp_readable(1e18) == "(unknown)"
 
 
-def test_format_timestamp_readable_value_error_returns_unknown() -> None:
-    with patch("src.podcast_filtering.datetime") as mock_dt:
-        mock_dt.fromtimestamp.side_effect = ValueError("out of range")
-        result = format_timestamp_readable(12345.0)
-    assert result == "(unknown)"
+def test_format_timestamp_readable_nan_returns_unknown() -> None:
+    assert format_timestamp_readable(float("nan")) == "(unknown)"
 
 
 # ---------------------------------------------------------------------------
