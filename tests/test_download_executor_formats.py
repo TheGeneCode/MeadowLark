@@ -130,7 +130,11 @@ class TestTry720FallbackGuards:
 
 
 class TestTry720FallbackTriggersOn403:
-    """Regression (#12482): a gated-1080 403 must also trigger the 720p retry, not only the 'format not available' phrase."""
+    """
+    Regression (#12482): a gated-1080 403 must trigger 720p retry.
+
+    Not only the 'format not available' phrase.
+    """
 
     @pytest.mark.parametrize(
         "error_str",
@@ -211,7 +215,7 @@ class TestTry720FallbackFormatString:
         assert "height<=720" in opts["format"]
 
     def test_format_selector_uses_mp4_even_when_vfmt_is_mkv(self) -> None:
-        """Format selector stays ext=mp4 even when vfmt='mkv'; container is mkv via merge_output_format."""
+        """Format selector stays ext=mp4 even when vfmt='mkv'; container is mkv via merge format."""
         opts = _run_fallback_and_capture_options("mkv", "m4a", {})
         assert "ext=mp4" in opts["format"]
         assert opts["merge_output_format"] == "mkv"

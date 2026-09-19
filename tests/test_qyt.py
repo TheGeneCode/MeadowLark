@@ -230,7 +230,8 @@ class TestParseHistoryLog:
         """Parses legacy entries that have no URL field."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_text(
-            "[2026-03-01 10:00:00] Site: youtube | Type: 1080 | Title: Old Video | Result: SUCCESS\n",
+            "[2026-03-01 10:00:00] Site: youtube | Type: 1080 | Title: Old Video | "
+            "Result: SUCCESS\n",
             encoding="utf-8",
         )
         with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
@@ -244,7 +245,8 @@ class TestParseHistoryLog:
         """Parses new entries that include URL field."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_text(
-            "[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: New Video | Result: SUCCESS | URL: https://www.youtube.com/watch?v=xyz\n",
+            "[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: New Video | Result: "
+            "SUCCESS | URL: https://www.youtube.com/watch?v=xyz\n",
             encoding="utf-8",
         )
         with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
@@ -270,7 +272,8 @@ class TestParseHistoryLog:
         """Parses entries where the title contains ' | ' without breaking."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_text(
-            "[2026-04-01 12:00:00] Site: nebula | Type: podcast | Title: Part 1 | The Story | Result: SUCCESS | URL: https://nebula.tv/ep1\n",
+            "[2026-04-01 12:00:00] Site: nebula | Type: podcast | Title: Part 1 | The Story | "
+            "Result: SUCCESS | URL: https://nebula.tv/ep1\n",
             encoding="utf-8",
         )
         with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
@@ -296,7 +299,8 @@ class TestParseHistoryLog:
         r"""CRLF line endings do not leave a trailing \r in the result field."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_bytes(
-            b"[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Video | Result: SUCCESS\r\n",
+            b"[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Video | Result: "
+            b"SUCCESS\r\n",
         )
         with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
@@ -307,7 +311,8 @@ class TestParseHistoryLog:
         """UTF-8 BOM at start of file does not cause the first entry to be skipped."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_bytes(
-            b"\xef\xbb\xbf[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: First | Result: SUCCESS\n",
+            b"\xef\xbb\xbf[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: First | "
+            b"Result: SUCCESS\n",
         )
         with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
@@ -315,10 +320,11 @@ class TestParseHistoryLog:
         assert entries[0]["title"] == "First"
 
     def test_result_containing_pipe_url_uses_last_occurrence(self, tmp_path: Path) -> None:
-        """When result text contains ' | URL: ', the real URL (last field) is extracted correctly."""
+        """When result text contains ' | URL: ', the real URL (last field) is extracted."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_text(
-            "[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Vid | Result: SKIPPED (see | URL: docs) | URL: https://youtube.com/watch?v=abc\n",
+            "[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Vid | Result: SKIPPED "
+            "(see | URL: docs) | URL: https://youtube.com/watch?v=abc\n",
             encoding="utf-8",
         )
         with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):

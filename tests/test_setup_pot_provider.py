@@ -16,7 +16,8 @@ resolve_deno
     - venv deno.exe absent, PATH lacks deno -> returns None
 
 build_deno_install_cmd
-    - always                               -> [deno, "install", "--allow-scripts=npm:canvas", "--frozen"]
+    - always                               -> [deno, "install", "--allow-scripts=npm:canvas",
+                                                 "--frozen"]
 
 main — exit-code contract (highest-risk area per handoff)
     - server dir missing                          -> returns 2, message on stderr, nothing else runs

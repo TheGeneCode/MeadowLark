@@ -382,7 +382,8 @@ def test_download_retries_without_sponsorblock(monkeypatch):
             # First call should raise a SponsorBlock API failure; second call should succeed
             if len(DummyYDL.inst_opts) == 1:
                 raise DownloadError(
-                    "Postprocessing: Unable to communicate with SponsorBlock API: HTTP Error 503: Service Unavailable",
+                    "Postprocessing: Unable to communicate with SponsorBlock API: "
+                    "HTTP Error 503: Service Unavailable",
                 )
 
     # Patch YoutubeDL in download_executor module (where it's actually used)

@@ -320,7 +320,11 @@ class TestQmetaPropagation:
     """Test that qmeta['type'] records the rung that succeeded."""
 
     def test_qmeta_type_records_actual_rung(self, call_tracking_ydl) -> None:
-        """Requested 2160; first retry (1080) fails, second retry (720) succeeds; qmeta['type'] == '720'."""
+        """
+        Requested 2160; first retry (1080) fails, second retry (720) succeeds.
+
+        qmeta['type'] must equal '720'.
+        """
         _CallTrackingYDL.opts_list = []
         _CallTrackingYDL.raise_on_call = 1  # Fail first retry (1080), succeed second (720)
 

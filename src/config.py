@@ -1,4 +1,4 @@
-"""Centralized configuration management for paths and constants with environment variable fallbacks."""
+"""Centralized configuration management for paths and constants with env-var fallbacks."""
 
 import os
 import sys

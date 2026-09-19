@@ -477,7 +477,7 @@ class TestExtractBaseOutputDir:
         assert result is None
 
     def test_outtmpl_dict_default_empty_string_falls_back_to_other_value(self) -> None:
-        """Dict outtmpl where 'default' is an empty string falls back to first non-empty string value."""
+        """Dict outtmpl where 'default' is empty falls back to first non-empty string value."""
         executor = DownloadExecutor()
         options = {"outtmpl": {"default": "", "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}}
         result = executor._extract_base_output_dir(options)
@@ -803,7 +803,11 @@ class TestExecuteForwardsCookiefileOnError:
         mock_ydl_class: Mock,
         mock_extract: Mock,
     ) -> None:
-        """When execute() catches a DownloadError, _extract_title receives options so age-restricted lookups succeed."""
+        """
+        When execute() catches a DownloadError, _extract_title gets options.
+
+        This lets age-restricted lookups succeed.
+        """
         mock_ydl_instance = MagicMock()
         mock_ydl_instance.download.side_effect = DownloadError("Auth required")
         mock_ydl_class.return_value.__enter__.return_value = mock_ydl_instance

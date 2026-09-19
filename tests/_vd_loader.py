@@ -1,4 +1,8 @@
-"""Shared meadowlark.pyw module-loader shim used by tests needing a real ``MyWindow`` bound to a stubbed ``yt_dlp``."""
+"""
+Shared meadowlark.pyw module-loader shim.
+
+Used by tests needing a real ``MyWindow`` bound to a stubbed ``yt_dlp``.
+"""
 
 import importlib.util
 import sys

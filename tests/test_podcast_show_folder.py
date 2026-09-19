@@ -58,12 +58,12 @@ def test_build_podcast_outtmpl_whitespace_only_label_falls_back_to_misc() -> Non
 
 
 def test_build_podcast_outtmpl_numeric_string_label_is_not_falsy() -> None:
-    """A label of "0" is a non-empty string and must not be mistaken for missing (JS-style falsy trap)."""
+    """A label of "0" is a non-empty string and must not be mistaken for missing (falsy trap)."""
     assert build_podcast_outtmpl("0") == f"{podcast_base_dir()}/0/%(title)s.%(ext)s"
 
 
 def test_build_podcast_outtmpl_sanitizes_windows_invalid_chars() -> None:
-    """Show names containing Windows-illegal path characters are sanitized, not passed through raw."""
+    """Show names containing Windows-illegal path characters are sanitized, not passed raw."""
     raw = 'Cool Show: "Live" <2024>|Ep?1*'
     expected_label = sanitize_for_path(raw)
     tmpl = build_podcast_outtmpl(raw)

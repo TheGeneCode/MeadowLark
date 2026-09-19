@@ -1,10 +1,11 @@
 """
 Defines custom PyQt6 widgets for playlist selection and drag-and-drop functionality.
 
-PlaylistDialog provides a dialog for users to specify which videos from a playlist to select, supporting both manual input and drag-and-drop of URLs.
+PlaylistDialog provides a dialog for users to specify which videos from a playlist to
+select, supporting both manual input and drag-and-drop of URLs.
 
-DropLabel is a QLabel subclass that accepts dropped URLs, emits a signal when URLs are dropped, and provides visual feedback.
-
+DropLabel is a QLabel subclass that accepts dropped URLs, emits a signal when URLs are
+dropped, and provides visual feedback.
 """
 
 from os import startfile
@@ -29,9 +30,11 @@ from src.settings_dialog import get_setting
 
 class PlaylistDialog(QDialog):
     """
-    A dialog for selecting specific videos from a playlist, supporting manual input and drag-and-drop of URLs.
+    A dialog for selecting specific videos from a playlist.
 
-    Provides a text input for specifying video indices and an OK button to confirm selection. Emits a signal when URLs are dropped.
+    Supports manual input and drag-and-drop of URLs. Provides a text input for
+    specifying video indices and an OK button to confirm selection. Emits a signal when
+    URLs are dropped.
     """
 
     ADDED_TEXT = "Added!!!"
@@ -39,9 +42,10 @@ class PlaylistDialog(QDialog):
 
     def __init__(self, playlist_count: int, parent: QWidget = None) -> None:
         """
-        Initialize the playlist selection dialog, setting up the window title, input field, and OK button.
+        Initialize the playlist selection dialog.
 
-        Displays the total number of videos in the playlist and allows users to specify which videos to select.
+        Sets up the window title, input field, and OK button. Displays the total number
+        of videos in the playlist and allows users to specify which videos to select.
         """
         super().__init__(parent)
 
@@ -51,7 +55,8 @@ class PlaylistDialog(QDialog):
 
         label = QLabel(
             self.tr(
-                f"There are {playlist_count} videos in the playlist. Which do you want? Blank = all or format like (3,5,7-9)",
+                f"There are {playlist_count} videos in the playlist. Which do you want? Blank = "
+                f"all or format like (3,5,7-9)",
             ),
         )
         label.setFont(QFont(QFont().defaultFamily(), 12))
@@ -99,19 +104,22 @@ class DropLabel(QLabel):
     """
     .
 
-    A QLabel subclass that accepts drag-and-drop of URLs, emits a signal when URLs are dropped, and provides visual feedback by temporarily changing its text.
+    A QLabel subclass that accepts drag-and-drop of URLs, emits a signal when URLs are
+    dropped, and provides visual feedback by temporarily changing its text.
 
     Args:
         text (str): The label's initial text.
         color (str): The background color for the label.
         connection (callable): Slot to connect to the urls_dropped signal.
-        source_key (str | None): Stable routing key emitted on drop; defaults to text if not provided.
+        source_key (str | None): Stable routing key emitted on drop; defaults to text if
+            not provided.
         text_color (str): Foreground text color.
         min_size (int): Minimum width and height of the label, in pixels.
         font_size (int): Point size of the label's font.
 
     Signals:
-        urls_dropped (list, str): Emitted with a list of dropped URLs and the original label text.
+        urls_dropped (list, str): Emitted with a list of dropped URLs and the original
+            label text.
     """
 
     ADDED_TEXT = "Added!!!"
@@ -121,7 +129,7 @@ class DropLabel(QLabel):
         self,
         text: str,
         color: str,
-        connection: Any,
+        connection: Any,  # noqa: ANN401 - Qt slot, any callable signature
         source_key: str | None = None,
         *,
         text_color: str = "#FFFFFF",
@@ -129,13 +137,16 @@ class DropLabel(QLabel):
         font_size: int = 32,
     ) -> None:
         """
-        Initialize the label with custom text, background color, and a connection for the URLs dropped signal.
+        Initialize the label.
+
+        Sets custom text, background color, and a connection for the URLs dropped signal.
 
         Args:
             text (str): The label text.
             color (str): The background color.
             connection (callable): Slot to connect to the urls_dropped signal.
-            source_key (str | None): Stable routing key emitted on drop; defaults to text if not provided.
+            source_key (str | None): Stable routing key emitted on drop; defaults to
+                text if not provided.
             text_color (str): Foreground text color.
             min_size (int): Minimum width and height of the label, in pixels.
             font_size (int): Point size of the label's font.
@@ -175,7 +186,10 @@ class DropLabel(QLabel):
 
     def dropEvent(self, event: QDropEvent) -> None:
         """
-        Handle the drop event by updating the label text, starting a timer to revert the text, and emitting the dropped URLs via the urls_dropped signal.
+        Handle the drop event.
+
+        Updates the label text, starts a timer to revert the text, and emits the
+        dropped URLs via the urls_dropped signal.
 
         Args:
             event (QDropEvent): The drop event containing the dropped data.
@@ -209,8 +223,8 @@ class PlaylistButton(QPushButton):
         self,
         text: str,
         playlist_path: str | Path,
-        *args: Any,
-        **kwargs: Any,
+        *args: Any,  # noqa: ANN401 - passthrough to QPushButton.__init__
+        **kwargs: Any,  # noqa: ANN401 - passthrough to QPushButton.__init__
     ) -> None:
         """
         .

@@ -248,7 +248,7 @@ class DownloadExecutor:
         )
 
     def _extract_base_output_dir(self, options: dict) -> str | None:
-        """Extract the base output directory from the outtmpl option, or None if not determinable."""
+        """Extract the base output directory from outtmpl, or None if not determinable."""
         outtmpl = options.get("outtmpl", "")
         outtmpl_str: str | None = None
 

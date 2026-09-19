@@ -97,7 +97,7 @@ def add_failed_download(path: Path, record: FailedRecord) -> list[FailedRecord]:
 
 
 def remove_failed_downloads(path: Path, keys: Iterable[str]) -> list[FailedRecord]:
-    """Remove every record whose key is in *keys* in one write; unknown or falsy keys are ignored."""
+    """Remove every record whose key is in *keys* in one write; unknown/falsy keys ignored."""
     drop = {key for key in keys if isinstance(key, str) and key}
     records = load_failed_downloads(path)
     # A hand-edited store can hold a non-string key (e.g. a list); testing it for
@@ -283,14 +283,14 @@ class ErrorCapturingLogger:
 
     def __init__(
         self,
-        inner: Any,
+        inner: Any,  # noqa: ANN401 - duck-typed logger proxy target
         on_error_line: Callable[[str], None],
     ) -> None:
         """Wrap *inner*, forwarding each error line to *on_error_line* as well."""
         self._inner = inner
         self._on_error_line = on_error_line
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401 - delegates to arbitrary logger attrs
         """Delegate debug/warning/and any other logger method to the wrapped logger."""
         return getattr(self._inner, name)
 

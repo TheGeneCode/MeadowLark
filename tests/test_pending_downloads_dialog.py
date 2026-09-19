@@ -471,7 +471,7 @@ def test_selection_of_record_missing_url_key_keeps_buttons_disabled() -> None:
 
 
 def test_row_renders_blank_for_completely_missing_optional_keys() -> None:
-    """A record missing "kind"/"source"/"title" keys outright must render as empty cells, not raise."""
+    """A record missing "kind"/"source"/"title" keys must render as empty cells, not raise."""
     record = {"url": "https://example.com/v", "release_at": None}
     dialog = PendingDownloadsDialog([record])
 

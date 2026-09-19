@@ -486,7 +486,7 @@ def test_remove_pending_many_mixed_present_and_absent_urls(store: Path) -> None:
 
 
 def test_remove_pending_many_duplicate_urls_in_input_still_removes_once(store: Path) -> None:
-    """Duplicate urls in the input list must not error or double-count; net effect is one removal."""
+    """Duplicate urls in the input must not error or double-count; net effect is one removal."""
     upsert_pending(store, make_pending_record("https://y/keep", "youtube"))
     upsert_pending(store, make_pending_record("https://y/dup", "youtube"))
 
@@ -499,7 +499,7 @@ def test_remove_pending_many_no_matching_urls_skips_write(
     store: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When nothing in the batch matches, save_pending_queue must not be called (one-write contract)."""
+    """When nothing in the batch matches, save_pending_queue must not be called (one-write)."""
     upsert_pending(store, make_pending_record("https://y/keep", "youtube"))
     save_calls: list[list] = []
 

@@ -217,7 +217,11 @@ def test_mf_availability_premium_only_is_not_skipped() -> None:
 
 
 def test_mf_needs_auth_and_is_live_queues_and_returns_skip_message() -> None:
-    """needs_auth + is_live: the live-queue logic must still fire (availability no longer short-circuits)."""
+    """
+    needs_auth + is_live: the live-queue logic must still fire.
+
+    Availability must not short-circuit it.
+    """
     add_fn = MagicMock()
     log_fn = MagicMock()
     mf = build_match_filter("1080playlists", add_fn, log_fn)

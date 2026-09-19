@@ -742,7 +742,7 @@ class TestOnAppUpdateResult:
 
 
 class TestAutoCheckIntegration:
-    """Integration: _on_app_update_result date-persist throttles the next _maybe_start_auto_app_update_check call."""
+    """Integration: _on_app_update_result date-persist throttles the next auto-check call."""
 
     def test_after_auto_check_no_update_next_call_is_throttled(self) -> None:
         """Simulates two startup calls: first fires, second (same day) is throttled."""

@@ -94,7 +94,8 @@ HELP_TEXT: dict[str, str] = {
     "VID_DL_COOKIES_FILE": (
         "Path to a cookies.txt file exported from your browser.\n"
         "Used by yt-dlp for authenticated downloads (e.g. age-restricted videos).\n"
-        "The file is NOT copied — it is referenced in place so browser extensions can keep it updated."
+        "The file is NOT copied — it is referenced in place so browser extensions can "
+        "keep it updated."
     ),
     "VID_DL_LABEL_DROP_AUDIO": (
         "Display text for the audio/podcast drop target.\n"

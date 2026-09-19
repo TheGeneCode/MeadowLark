@@ -585,7 +585,7 @@ class TestRemuxvideoKeyPresence:
         ["720playlists", "1080playlists", "480", "1080", "garbage"],
     )
     def test_remuxer_postprocessor_present_for_video_source(self, source: str) -> None:
-        """get_source_options must include FFmpegVideoRemuxer in postprocessors for video sources."""
+        """get_source_options must include FFmpegVideoRemuxer in postprocessors for video."""
         with _patch_formats("mp4", "m4a"):
             opts = get_source_options(source)
         assert _find_remuxer(opts) is not None, (

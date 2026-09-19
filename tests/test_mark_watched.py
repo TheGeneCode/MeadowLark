@@ -311,7 +311,11 @@ class TestBuildBaseYdlOptsMarkWatched:
         assert "mark_watched" in opts
 
     def test_setting_truthy_non_bool_string_false_absent(self) -> None:
-        """If runtime store holds string 'false', key is absent (truthy '' == False, 'false' is truthy in Python!)."""
+        """
+        If runtime store holds string 'false', key is absent.
+
+        Note: '' is falsy but the string 'false' is truthy in Python!
+        """
         # NOTE: the string "false" is truthy in Python. The guard in build_base_ydl_opts
         # is `if get_setting("VID_DL_MARK_WATCHED"):` — a plain truthiness check.
         # After _init_runtime_settings the store always holds a bool, so this edge

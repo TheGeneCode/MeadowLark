@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 _APPDATA_DIR = Path.home() / "AppData" / "Roaming" / "MeadowLark"
@@ -22,7 +23,7 @@ def needs_first_run() -> bool:
 
 
 class FirstRunWizard(QDialog):
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Welcome — MeadowLark Setup")
         self.setMinimumWidth(500)

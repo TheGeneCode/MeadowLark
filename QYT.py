@@ -1,4 +1,9 @@
-"""Provides PyQt-based classes for logging, progress signaling, and threaded download queue management using yt-dlp. Includes QLogger for emitting log messages, QHook for progress updates, and QYTQueue for managing and executing download tasks in a background thread with wake lock support."""
+"""
+PyQt classes for logging, progress signaling, and threaded download queue management.
+
+Includes QLogger for emitting log messages, QHook for progress updates, and QYTQueue for
+managing and executing download tasks in a background thread with wake lock support.
+"""
 
 import logging
 import re
@@ -51,7 +56,8 @@ class QLogger(QObject):
     A PyQt-based logger class that emits log messages via the messageChanged signal.
 
     Integrates with a download queue and provides debug, warning, and error methods,
-    emitting messages to connected slots, with filtering for debug messages containing 'ETA' or 'iB/s'.
+    emitting messages to connected slots, with filtering for debug messages containing
+    'ETA' or 'iB/s'.
     """
 
     message_changed = pyqtSignal(str)
@@ -77,7 +83,11 @@ class QLogger(QObject):
             self._debug_logger.log(level, msg)
 
     def debug(self, msg: str) -> None:
-        """Log a debug message using the module logger and emits the message via the message_changed signal, unless the message contains 'ETA' or 'iB/s'."""
+        """
+        Log a debug message using the module logger and emit the message_changed signal.
+
+        Skipped when the message contains 'ETA' or 'iB/s'.
+        """
         logger = logging.getLogger(__name__)
         logger.debug(msg)
         self._tee(logging.DEBUG, msg)
@@ -86,7 +96,7 @@ class QLogger(QObject):
 
     def warning(self, msg: str) -> None:
         """
-        Log a warning message using the module logger and emits the message via the message_changed signal.
+        Log a warning message using the module logger and emit the message_changed signal.
 
         Args:
             msg (str): The warning message to log and emit.
@@ -98,7 +108,7 @@ class QLogger(QObject):
 
     def error(self, msg: str) -> None:
         """
-        Log an error message using the module logger and emits the message via the message_changed signal.
+        Log an error message using the module logger and emit the message_changed signal.
 
         Args:
             msg (str): The error message to log and emit.
@@ -110,7 +120,7 @@ class QLogger(QObject):
 
     def exception(self, msg: str) -> None:
         """
-        Log an exception message using the module logger and emits the message via the message_changed signal.
+        Log an exception message using the module logger and emit the message_changed signal.
 
         Args:
             msg (str): The exception message to log and emit.
@@ -282,7 +292,8 @@ class HistoryLogger:
 
 
 _HISTORY_RE = re.compile(
-    r"^\[(?P<dt>[^\]]+)\] Site: (?P<site>.+?) \| Type: (?P<dtype>.+?) \| Title: (?P<title>.+) \| Result: (?P<result_raw>.+)$",
+    r"^\[(?P<dt>[^\]]+)\] Site: (?P<site>.+?) \| Type: (?P<dtype>.+?) \| Title: (?P<title>.+) \| "
+    r"Result: (?P<result_raw>.+)$",
 )
 
 
@@ -416,8 +427,9 @@ class QYTQueue(QThread):
     """
     Manages a threaded download queue using QThread, emitting progress and completion signals.
 
-    Handles download tasks from a queue, emits status updates via messageChanged, and signals when the queue is empty.
-    Integrates with yt-dlp for downloading, supports progress hooks, and manages logger connections for error reporting.
+    Handles download tasks from a queue, emits status updates via messageChanged, and
+    signals when the queue is empty. Integrates with yt-dlp for downloading, supports
+    progress hooks, and manages logger connections for error reporting.
     """
 
     message_changed = pyqtSignal(str)
@@ -427,7 +439,7 @@ class QYTQueue(QThread):
 
     def __init__(self, download_queue: Queue) -> None:
         """
-        Initialize the object with a given QThread-based download queue and sets the thread as a daemon.
+        Initialize the download queue and set the thread as a daemon.
 
         Args:
             download_queue (QThread): The thread managing the download queue.
@@ -454,7 +466,12 @@ class QYTQueue(QThread):
         wait_for_deno_warm()
 
     def run(self) -> None:
-        """Continuously processes download tasks from the queue in a background thread, emitting progress and completion messages, and signals when the queue becomes empty. Keeps the system awake during execution using a wake lock."""
+        """
+        Continuously process download tasks from the queue in a background thread.
+
+        Emits progress and completion messages, and signals when the queue becomes
+        empty. Keeps the system awake during execution using a wake lock.
+        """
         with keep.running():
             while True:
                 item = self.downloadQueue.get()

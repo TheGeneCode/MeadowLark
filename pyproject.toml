@@ -29,6 +29,11 @@ dev = [
 where = ["."]
 include = ["src*"]
 
+# Ruff floor: charter profile (source: genekit/python/pyproject.toml).
+# Checked by ~/.claude/scripts/check_ruff_baseline.py. Stricter selects are fine; never ignore a floor code globally.
+[tool.ruff]
+line-length = 100
+
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
@@ -38,25 +43,18 @@ ignore = [
     "D203",   # Incompatible with D211 (no-blank-line-before-class)
     "D212",   # Multi-line docstring summary should start at the first line
     "D413",   # Missing blank line after last section in docstring
-    "E501",   # Line too long
     "ERA001", # Found commented-out code
     "TD002",  # Missing author in TODO
     "TD003",  # Missing issue link on the line following a TODO
     "FIX002", # Line contains TODO
     "COM812", # Trailing comma (conflicts with ruff formatter)
     "S101",   # Use of assert — standard pytest pattern
-    "ANN001", # Missing type annotation for function argument
-    "ANN201", # Missing return type annotation for public function
-    "ANN204", # Missing return type annotation for special method
     "RUF059", # Unpacked variable `_` never used — _ is a Python idiom
     "ARG001", # Unused function argument — valid in callbacks/interfaces
     "ARG002", # Unused method argument — valid in callbacks/interfaces
     "FBT001", # Boolean-typed positional argument — valid API choice
     "FBT002", # Boolean default positional argument — valid API choice
     "SLF001", # Private member accessed — internal calls within same module
-    "ANN002", # Missing type annotation for *args
-    "ANN003", # Missing type annotation for **kwargs
-    "ANN202", # Missing return type for private function
     "D100",   # Missing docstring in public module
     "D101",   # Missing docstring in public class
     "D107",   # Missing docstring in __init__
@@ -67,7 +65,6 @@ ignore = [
     "PLR0913", # Too many arguments in function definition
     "PLR0911", # Too many return statements
     "FBT003",  # Boolean positional value in function call
-    "ANN401",  # Dynamically typed `Any` — generic merges, Qt signal args, test helpers
     "BLE001",  # Blind `except Exception` — intentional defensive top-level catches
     "TRY300",  # Consider moving to `else` block — style preference
     "C901",    # Function too complex — acceptable for this app's size
@@ -75,7 +72,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["PLC0415", "TRY002", "N818", "PT018", "N806", "RUF012", "N802", "N815"]
+"tests/**" = ["PLC0415", "TRY002", "N818", "PT018", "N806", "RUF012", "N802", "N815", "ANN"]
 # PyQt event-handler overrides (dragEnterEvent, dropEvent, ...) must match Qt's API.
 "UIClasses.py" = ["N802"]
 # Standalone dev/CLI tools, intentionally not an importable package.
