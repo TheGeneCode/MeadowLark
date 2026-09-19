@@ -233,9 +233,7 @@ class TestResolveLatestViaYtdlp:
 
     def _call(self, win, playlist_url: str, info_return_value: object) -> dict | None:
         """Invoke _resolve_latest_via_ytdlp with a mocked extract_playlist_info."""
-        with patch.object(
-            self.vd, "extract_playlist_info", return_value=info_return_value
-        ):
+        with patch.object(self.vd, "extract_playlist_info", return_value=info_return_value):
             return self.vd.MyWindow._resolve_latest_via_ytdlp(win, playlist_url)
 
     def _make_win(self):
@@ -282,9 +280,7 @@ class TestResolveLatestViaYtdlp:
             "webpage_url": "https://www.youtube.com/watch?v=abc",
             "timestamp": 1700000000,
         }
-        result = self._call(
-            self._make_win(), "http://pl/mixed", {"entries": [None, valid]}
-        )
+        result = self._call(self._make_win(), "http://pl/mixed", {"entries": [None, valid]})
         assert result is not None
         assert result["url"] == "https://www.youtube.com/watch?v=abc"
         assert result["ts"] == 1700000000
@@ -314,9 +310,7 @@ class TestResolveLatestViaYtdlp:
     def test_returns_none_when_entry_has_no_url_fields(self) -> None:
         """Return None when entry has neither webpage_url nor url."""
         invalid = {"id": "abc123", "timestamp": 100}
-        result = self._call(
-            self._make_win(), "http://pl/nourl", {"entries": [invalid]}
-        )
+        result = self._call(self._make_win(), "http://pl/nourl", {"entries": [invalid]})
         assert result is None
 
     # --- timestamp may be None ---
@@ -361,9 +355,7 @@ class TestResolveLatestViaYtdlp:
         import utils as u
 
         with (
-            patch.object(
-                vd, "extract_playlist_info", side_effect=ydl_error_class("err")
-            ),
+            patch.object(vd, "extract_playlist_info", side_effect=ydl_error_class("err")),
             patch.object(u, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/err")
@@ -446,9 +438,7 @@ class TestResolveLatestViaYtdlp:
         import utils as u
 
         with (
-            patch.object(
-                vd, "extract_playlist_info", side_effect=download_error("network down")
-            ),
+            patch.object(vd, "extract_playlist_info", side_effect=download_error("network down")),
             patch.object(u, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/nodverr")
@@ -492,9 +482,7 @@ class TestGuardedStatusAction:
         row: int,
         error_label: str = "test action",
     ) -> None:
-        self.vd.MyWindow._guarded_status_action(
-            win, action, row, error_label=error_label
-        )
+        self.vd.MyWindow._guarded_status_action(win, action, row, error_label=error_label)
 
     # --- action raises RuntimeError (generic Exception) ---
 
@@ -845,8 +833,7 @@ class TestOpenLatestForRow:
         self._call(win, 0)
 
         assert any(
-            "Could not resolve latest episode for Show" in line
-            for line in win._logged_lines
+            "Could not resolve latest episode for Show" in line for line in win._logged_lines
         ), "Expected the existing could-not-resolve note to be preserved"
         assert opened == [("https://youtube.com/playlist?list=PLx", "Show")], (
             "Expected the playlist URL to be opened exactly once as a fallback"
@@ -929,12 +916,8 @@ class TestScheduledPremiereStatus:
         # ydl_opts={} → archive_path is None → load_downloaded_video_ids(None)
         # returns an empty set, so the cache branch is skipped and the premiere
         # error propagates straight into the scheduled-error handler.
-        with patch.object(
-            vd, "fetch_latest_accessible_entry", side_effect=download_error(err)
-        ):
-            _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(
-                win, [url], {}
-            )
+        with patch.object(vd, "fetch_latest_accessible_entry", side_effect=download_error(err)):
+            _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(win, [url], {})
 
         assert len(statuses) == 1
         st = statuses[0]
@@ -968,18 +951,17 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
         from tests._vd_loader import _make_dummy_win
 
         vd = self.vd
-        with patch.object(
-            u,
-            "load_playlist_comments_for_source",
-            return_value={},
-        ), patch.object(u, "sanitize_for_path", lambda s: s):
+        with (
+            patch.object(
+                u,
+                "load_playlist_comments_for_source",
+                return_value={},
+            ),
+            patch.object(u, "sanitize_for_path", lambda s: s),
+        ):
             win = _make_dummy_win(vd)
-            with patch.object(
-                vd, "fetch_latest_accessible_entry", side_effect=error
-            ):
-                return vd.MyWindow._filter_audio_playlist_urls(
-                    win, [url], ydl_opts or {}
-                )
+            with patch.object(vd, "fetch_latest_accessible_entry", side_effect=error):
+                return vd.MyWindow._filter_audio_playlist_urls(win, [url], ydl_opts or {})
 
     def test_scheduled_premiere_without_video_id_still_upcoming(self) -> None:
         """
@@ -1023,9 +1005,7 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
         assert had_error is True
         assert len(statuses) == 1
         st = statuses[0]
-        assert st["status"].startswith("Error:"), (
-            f"expected Error: prefix, got {st['status']!r}"
-        )
+        assert st["status"].startswith("Error:"), f"expected Error: prefix, got {st['status']!r}"
         assert st["latest_date"] == "(error)"
         assert "latest_url" not in st
 

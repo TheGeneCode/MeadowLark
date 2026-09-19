@@ -3,9 +3,7 @@
 from src.progress_smoothing import ProgressSmoother
 
 
-def _tick(
-    downloaded: int, total: int | None = None, *, filename: str = "a.mp4", **extra
-) -> dict:
+def _tick(downloaded: int, total: int | None = None, *, filename: str = "a.mp4", **extra) -> dict:
     """Construct a minimal progress dict for testing."""
     d: dict = {"status": "downloading", "downloaded_bytes": downloaded, "filename": filename}
     if total is not None:
@@ -123,11 +121,10 @@ def test_downloaded_never_decreases() -> None:
 def test_total_estimate_is_ema_smoothed() -> None:
     """total_bytes_estimate is EMA-smoothed, not taken as-is."""
     smoother = ProgressSmoother(
-        total_alpha=0.2, min_interval=0.0  # 20% weight on new estimate
+        total_alpha=0.2,
+        min_interval=0.0,  # 20% weight on new estimate
     )
-    smoother.update(
-        _tick(10_000_000, total=None, total_bytes_estimate=100_000_000), now=0.0
-    )
+    smoother.update(_tick(10_000_000, total=None, total_bytes_estimate=100_000_000), now=0.0)
     result = smoother.update(
         _tick(20_000_000, total=None, total_bytes_estimate=200_000_000), now=1.0
     )
@@ -160,9 +157,7 @@ def test_total_never_below_downloaded() -> None:
     """Bar cannot exceed 100 % — total is clamped >= downloaded."""
     smoother = ProgressSmoother(min_interval=0.0)
     # Estimate is way too low; downloaded exceeds it
-    result = smoother.update(
-        _tick(50_000, total=None, total_bytes_estimate=1_000), now=0.0
-    )
+    result = smoother.update(_tick(50_000, total=None, total_bytes_estimate=1_000), now=0.0)
 
     assert result is not None
     # total = max(round(1000), 50000) = 50000
@@ -176,13 +171,9 @@ def test_speed_survives_file_boundary() -> None:
     )
     # 5 ticks on video.mp4 at 10 MB/s
     for i in range(5):
-        smoother.update(
-            _tick(i * 10_000_000, total=50_000_000, filename="video.mp4"), now=float(i)
-        )
+        smoother.update(_tick(i * 10_000_000, total=50_000_000, filename="video.mp4"), now=float(i))
     # Switch to audio.m4a with 1M at now=5 (it's a fresh file, so per-file is 1M not cumulative)
-    result = smoother.update(
-        _tick(1_000_000, total=10_000_000, filename="audio.m4a"), now=5.0
-    )
+    result = smoother.update(_tick(1_000_000, total=10_000_000, filename="audio.m4a"), now=5.0)
 
     assert result is not None
     # Speed should still be ~10 MB/s (cumulative went from 50M to 51M over ~5 seconds)

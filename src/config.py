@@ -72,9 +72,7 @@ HISTORY_LOG_PATH: Final[Path] = _resolve_path("VID_DL_HISTORY_LOG", "history_log
 
 # Resource directories and files
 RESOURCES_DIR: Final[Path] = _resolve_path("VID_DL_RESOURCES_DIR", "resources")
-COOKIES_FILE: Final[Path] = _resolve_path(
-    "VID_DL_COOKIES_FILE", RESOURCES_DIR / "cookies.txt"
-)
+COOKIES_FILE: Final[Path] = _resolve_path("VID_DL_COOKIES_FILE", RESOURCES_DIR / "cookies.txt")
 LIVE_QUEUE_FILE: Final[Path] = RESOURCES_DIR / "live_queue.txt"
 FAILED_DOWNLOADS_FILE: Final[Path] = RESOURCES_DIR / "failed_downloads.json"
 # Deferred downloads: live streams parked by match_filter plus premieres that were
@@ -153,9 +151,7 @@ VIDEO_STORAGE_DIR: Final[Path] = _resolve_path(
 if getattr(sys, "frozen", False):
     VENV_SCRIPTS_DIR: Final[Path] = Path(sys._MEIPASS)  # type: ignore[attr-defined]
 else:
-    VENV_SCRIPTS_DIR: Final[Path] = _resolve_path(
-        "VID_DL_VENV_SCRIPTS", ".venv/Scripts"
-    )
+    VENV_SCRIPTS_DIR: Final[Path] = _resolve_path("VID_DL_VENV_SCRIPTS", ".venv/Scripts")
 
 # Make the bundled Deno runtime discoverable on PATH. The yt-dlp PO-token
 # provider (bgutil, script mode) locates node/deno via PATH, not via yt-dlp's
@@ -164,9 +160,7 @@ else:
 # unavailable and 1080p downloads regress to HTTP 403 (see YOUTUBE_PLAYER_CLIENTS
 # below). Prepend the (absolute) scripts dir once, only if it really exists.
 _scripts_abs = str(VENV_SCRIPTS_DIR.resolve())
-if VENV_SCRIPTS_DIR.exists() and _scripts_abs not in os.environ.get("PATH", "").split(
-    os.pathsep
-):
+if VENV_SCRIPTS_DIR.exists() and _scripts_abs not in os.environ.get("PATH", "").split(os.pathsep):
     os.environ["PATH"] = _scripts_abs + os.pathsep + os.environ.get("PATH", "")
 
 # Absolute path to the bundled Deno executable, or None when it is not there.
@@ -226,9 +220,7 @@ YOUTUBE_PLAYER_CLIENTS: Final[str] = os.getenv("VID_DL_YT_PLAYER_CLIENT", "web_e
 if getattr(sys, "frozen", False):
     _pot_default_home: Path = Path(sys._MEIPASS) / "bgutil-server"  # type: ignore[attr-defined]
 else:
-    _pot_default_home = (
-        Path(__file__).parent.parent / "vendor" / "bgutil-pot-provider" / "server"
-    )
+    _pot_default_home = Path(__file__).parent.parent / "vendor" / "bgutil-pot-provider" / "server"
 POT_PROVIDER_SERVER_HOME: Final[Path] = _resolve_path(
     "VID_DL_POT_SERVER_HOME",
     _pot_default_home,
@@ -320,9 +312,7 @@ PODCAST_LOOKAHEAD_MAX_ATTEMPTS: Final[int] = int(
     os.getenv("VID_DL_PODCAST_LOOKAHEAD_MAX_ATTEMPTS", "5"),
 )
 
-PODCAST_AUTO_CHECK: Final[bool] = (
-    os.getenv("VID_DL_PODCAST_AUTO_CHECK", "true").lower() == "true"
-)
+PODCAST_AUTO_CHECK: Final[bool] = os.getenv("VID_DL_PODCAST_AUTO_CHECK", "true").lower() == "true"
 ALWAYS_ON_TOP: Final[bool] = os.getenv("VID_DL_ALWAYS_ON_TOP", "true").lower() == "true"
 APP_UPDATE_AUTO_CHECK: Final[bool] = (
     os.getenv("VID_DL_APP_UPDATE_AUTO_CHECK", "true").lower() == "true"
@@ -386,9 +376,7 @@ LOGFILE_MIGRATION_ENABLED: Final[bool] = (
 # extraction/403 failures -- error_log.txt only ever receives the final exception
 # string, which does not say which player client served the chosen format or
 # whether its media URL carried a "pot=" token.
-YTDLP_VERBOSE: Final[bool] = (
-    os.getenv("VID_DL_YTDLP_VERBOSE", "false").lower() == "true"
-)
+YTDLP_VERBOSE: Final[bool] = os.getenv("VID_DL_YTDLP_VERBOSE", "false").lower() == "true"
 # Absolute: the point of this file is that someone can find it and read it, and
 # the app is not always launched from the repo root.
 YTDLP_DEBUG_LOG_PATH: Final[Path] = (

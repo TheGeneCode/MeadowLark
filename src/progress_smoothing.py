@@ -163,7 +163,9 @@ class ProgressSmoother:
         if self._file_total is None:
             self._file_total = float(est)
         else:
-            self._file_total = self._total_alpha * float(est) + (1.0 - self._total_alpha) * self._file_total
+            self._file_total = (
+                self._total_alpha * float(est) + (1.0 - self._total_alpha) * self._file_total
+            )
 
     def _total(self) -> int | None:
         """Render-ready total, never below the byte count so the bar cannot exceed 100 %."""

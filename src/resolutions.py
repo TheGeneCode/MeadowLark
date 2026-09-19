@@ -53,7 +53,14 @@ class ResolutionPreset:
 #    backgrounds are too light to carry white 32pt text.
 RESOLUTION_PRESETS: Final[tuple[ResolutionPreset, ...]] = (
     ResolutionPreset(2160, "2160", "4K UHD - 3840x2160", "#23273D", "#FFFFFF", "2160playlists.txt"),
-    ResolutionPreset(1440, "1440", 'QHD - 2560x1440, often marketed as "2K"', "#333756", "#FFFFFF", "1440playlists.txt"),
+    ResolutionPreset(
+        1440,
+        "1440",
+        'QHD - 2560x1440, often marketed as "2K"',
+        "#333756",
+        "#FFFFFF",
+        "1440playlists.txt",
+    ),
     ResolutionPreset(1080, "1080", "Full HD - 1920x1080", "#424769", "#FFFFFF", "playlists.txt"),
     ResolutionPreset(720, "720", "HD - 1280x720", "#7077A1", "#FFFFFF", "720playlists.txt"),
     ResolutionPreset(480, "480", "SD - 854x480", "#A0A6C7", "#1A1B2E", "480playlists.txt"),

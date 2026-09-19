@@ -19,9 +19,7 @@ class TestGetLocalTimestamp:
         """get_local_timestamp() should return string in format 'YYYY-MM-DD HH:MM:SS'."""
         result = get_local_timestamp()
         pattern = r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"
-        assert re.match(pattern, result), (
-            f"Timestamp {result} does not match expected format"
-        )
+        assert re.match(pattern, result), f"Timestamp {result} does not match expected format"
 
     def test_timestamp_is_recent(self) -> None:
         """get_local_timestamp() should return current time (within 1 second)."""

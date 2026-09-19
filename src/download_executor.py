@@ -187,8 +187,7 @@ class DownloadExecutor:
                 trigger_phrase=self._GATED_TRIGGERS,
                 error_str=error_str,
                 message=(
-                    f"{height} format unavailable or blocked for '{title}'; "
-                    f"retrying at {rung}..."
+                    f"{height} format unavailable or blocked for '{title}'; retrying at {rung}..."
                 ),
                 options_modifier=self._rung_options_modifier(rung),
                 log_context=f"{rung}p fallback attempt failed",

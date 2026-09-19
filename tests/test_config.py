@@ -350,9 +350,7 @@ class TestResolutionRouting:
 
     def test_playlist_path_for_height_1080_env_override(self) -> None:
         """The legacy VID_DL_PLAYLISTS_FILE env var must still override 1080's path."""
-        with mock.patch.dict(
-            os.environ, {"VID_DL_PLAYLISTS_FILE": "/custom/mine.txt"}
-        ):
+        with mock.patch.dict(os.environ, {"VID_DL_PLAYLISTS_FILE": "/custom/mine.txt"}):
             path = config.playlist_path_for_height(1080)
             assert path == Path("/custom/mine.txt")
 
@@ -365,9 +363,7 @@ class TestResolutionRouting:
 
     def test_playlist_path_for_height_new_rung_env_override(self) -> None:
         """A new registry rung must honor its generated VID_DL_PLAYLISTS_<H>_FILE key."""
-        with mock.patch.dict(
-            os.environ, {"VID_DL_PLAYLISTS_1440_FILE": "/custom/1440.txt"}
-        ):
+        with mock.patch.dict(os.environ, {"VID_DL_PLAYLISTS_1440_FILE": "/custom/1440.txt"}):
             path = config.playlist_path_for_height(1440)
             assert path == Path("/custom/1440.txt")
 
@@ -385,9 +381,7 @@ class TestResolutionRouting:
         (rather than one already screened by height_from_source), any env
         override the user set for it is silently ignored.
         """
-        with mock.patch.dict(
-            os.environ, {"VID_DL_PLAYLISTS_999_FILE": "/custom/999.txt"}
-        ):
+        with mock.patch.dict(os.environ, {"VID_DL_PLAYLISTS_999_FILE": "/custom/999.txt"}):
             path = config.playlist_path_for_height(999)
             assert path != Path("/custom/999.txt")
             assert path.name == "999playlists.txt"
@@ -411,9 +405,7 @@ class TestResolutionRouting:
 
     def test_button_label_for_height_1080_uses_legacy_key(self) -> None:
         """1080's button label must honor the legacy VID_DL_LABEL_BTN_PLAYLISTS key."""
-        with mock.patch.dict(
-            os.environ, {"VID_DL_LABEL_BTN_PLAYLISTS": "My Playlists"}
-        ):
+        with mock.patch.dict(os.environ, {"VID_DL_LABEL_BTN_PLAYLISTS": "My Playlists"}):
             assert config.button_label_for_height(1080) == "My Playlists"
 
     def test_button_label_for_height_new_rung_default(self) -> None:
@@ -435,9 +427,7 @@ class TestResolutionRouting:
         """ENABLED_RESOLUTIONS must parse a comma-separated env override."""
         import importlib
 
-        with mock.patch.dict(
-            os.environ, {"VID_DL_ENABLED_RESOLUTIONS": "2160,480"}
-        ):
+        with mock.patch.dict(os.environ, {"VID_DL_ENABLED_RESOLUTIONS": "2160,480"}):
             importlib.reload(config)
             assert config.ENABLED_RESOLUTIONS == (2160, 480)
 
@@ -445,9 +435,7 @@ class TestResolutionRouting:
         """An all-garbage ENABLED_RESOLUTIONS env value must fall back, not crash import."""
         import importlib
 
-        with mock.patch.dict(
-            os.environ, {"VID_DL_ENABLED_RESOLUTIONS": "abc,999"}
-        ):
+        with mock.patch.dict(os.environ, {"VID_DL_ENABLED_RESOLUTIONS": "abc,999"}):
             importlib.reload(config)
             assert config.ENABLED_RESOLUTIONS == (1080, 720)
 
@@ -577,9 +565,7 @@ class TestAlwaysOnTopConfiguration:
         val = sd.get_setting("VID_DL_ALWAYS_ON_TOP")
         assert val is None
 
-    def test_always_on_top_persist_setting_writes_true_lowercase(
-        self, tmp_path: Path
-    ) -> None:
+    def test_always_on_top_persist_setting_writes_true_lowercase(self, tmp_path: Path) -> None:
         """_persist_setting serializes True as 'true' (lowercase) in the .env file."""
         import importlib
 
@@ -596,9 +582,7 @@ class TestAlwaysOnTopConfiguration:
         content = fake_env.read_text(encoding="utf-8")
         assert "VID_DL_ALWAYS_ON_TOP=true\n" in content
 
-    def test_always_on_top_persist_setting_writes_false_lowercase(
-        self, tmp_path: Path
-    ) -> None:
+    def test_always_on_top_persist_setting_writes_false_lowercase(self, tmp_path: Path) -> None:
         """_persist_setting serializes False as 'false' (lowercase) in the .env file."""
         import importlib
 
@@ -614,9 +598,7 @@ class TestAlwaysOnTopConfiguration:
         content = fake_env.read_text(encoding="utf-8")
         assert "VID_DL_ALWAYS_ON_TOP=false\n" in content
 
-    def test_always_on_top_persist_setting_updates_runtime_store(
-        self, tmp_path: Path
-    ) -> None:
+    def test_always_on_top_persist_setting_updates_runtime_store(self, tmp_path: Path) -> None:
         """_persist_setting also updates _runtime so get_setting reflects the new value."""
         import importlib
 
@@ -631,9 +613,7 @@ class TestAlwaysOnTopConfiguration:
             sd._persist_setting("VID_DL_ALWAYS_ON_TOP", False)
         assert sd.get_setting("VID_DL_ALWAYS_ON_TOP") is False
 
-    def test_always_on_top_persist_setting_replaces_existing_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_always_on_top_persist_setting_replaces_existing_line(self, tmp_path: Path) -> None:
         """_persist_setting replaces an existing VID_DL_ALWAYS_ON_TOP line, not appends."""
         import importlib
 

@@ -110,9 +110,7 @@ def test_refresh_pending_button_with_explicit_records_updates_text_and_visibilit
     win = _make_win(vd, tmp_path / "pending_queue.json")
     texts: list[str] = []
     visibilities: list[bool] = []
-    win.buttonPending = SimpleNamespace(
-        setText=texts.append, setVisible=visibilities.append
-    )
+    win.buttonPending = SimpleNamespace(setText=texts.append, setVisible=visibilities.append)
 
     win._refresh_pending_button([_pending_record(), _pending_record(url="u2")])
 
@@ -369,9 +367,15 @@ def test_show_pending_downloads_refocuses_existing_live_dialog_without_replacing
     existing = _FakeDialog([])
     win._pending_dialog = existing
 
-    with patch.object(vd, "PendingDownloadsDialog", Mock(side_effect=AssertionError(
-        "should not construct a new dialog while one is cached and alive"
-    ))):
+    with patch.object(
+        vd,
+        "PendingDownloadsDialog",
+        Mock(
+            side_effect=AssertionError(
+                "should not construct a new dialog while one is cached and alive"
+            )
+        ),
+    ):
         win._show_pending_downloads()
 
     assert win._pending_dialog is existing
@@ -394,9 +398,10 @@ def test_show_pending_downloads_recovers_when_cached_dialog_was_deleted_by_qt(
     win = _make_win(vd, path)
     win._pending_dialog = _RaisingDialog()
 
-    with patch.object(vd, "PendingDownloadsDialog", _FakeDialog), patch.object(
-        vd.utils, "log_exception"
-    ) as mock_log:
+    with (
+        patch.object(vd, "PendingDownloadsDialog", _FakeDialog),
+        patch.object(vd.utils, "log_exception") as mock_log,
+    ):
         win._show_pending_downloads()
 
     assert isinstance(win._pending_dialog, _FakeDialog)

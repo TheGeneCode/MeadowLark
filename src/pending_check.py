@@ -120,9 +120,7 @@ def check_pending_queue(deps: PendingCheckDeps) -> list[PendingRecord]:
     for record in records:
         url = record.get("url", "")
         try:
-            info = extract_release_info(
-                url, cookiefile=deps.cookiefile, ydl_class=deps.ydl_class
-            )
+            info = extract_release_info(url, cookiefile=deps.cookiefile, ydl_class=deps.ydl_class)
         # KeyboardInterrupt is a BaseException and deliberately still propagates.
         except YDL_EXTRACTION_ERRORS as exc:
             deps.log(f"Error checking pending url {url}: {exc}")

@@ -65,9 +65,7 @@ def _freeze_today(today: date) -> tuple[MagicMock, MagicMock]:
     fake_date.today.return_value = today
     fake_date.fromisoformat.side_effect = date.fromisoformat
     fake_datetime = MagicMock(wraps=datetime)
-    fake_datetime.now.return_value = datetime(
-        today.year, today.month, today.day, tzinfo=UTC
-    )
+    fake_datetime.now.return_value = datetime(today.year, today.month, today.day, tzinfo=UTC)
     return fake_date, fake_datetime
 
 
@@ -165,17 +163,13 @@ class TestConfigAppUpdateLastChecked:
 
     def test_last_checked_from_env_iso_date(self) -> None:
         """Env var with a valid ISO date is preserved as-is."""
-        with patch.dict(
-            os.environ, {"VID_DL_APP_UPDATE_LAST_CHECKED": "2026-01-15"}
-        ):
+        with patch.dict(os.environ, {"VID_DL_APP_UPDATE_LAST_CHECKED": "2026-01-15"}):
             cfg = self._reload()
             assert cfg.APP_UPDATE_LAST_CHECKED == "2026-01-15"
 
     def test_last_checked_from_env_arbitrary_string(self) -> None:
         """Env var with an invalid date string is still returned verbatim."""
-        with patch.dict(
-            os.environ, {"VID_DL_APP_UPDATE_LAST_CHECKED": "not-a-date"}
-        ):
+        with patch.dict(os.environ, {"VID_DL_APP_UPDATE_LAST_CHECKED": "not-a-date"}):
             cfg = self._reload()
             assert cfg.APP_UPDATE_LAST_CHECKED == "not-a-date"
 
@@ -228,9 +222,7 @@ class TestRuntimeSettingsSeeding:
             assert val == ""
 
     def test_last_checked_seeded_from_env(self) -> None:
-        with patch.dict(
-            os.environ, {"VID_DL_APP_UPDATE_LAST_CHECKED": "2026-03-01"}
-        ):
+        with patch.dict(os.environ, {"VID_DL_APP_UPDATE_LAST_CHECKED": "2026-03-01"}):
             config, sd = self._reload_both()
             sd._init_runtime_settings()
             val = sd.get_setting("VID_DL_APP_UPDATE_LAST_CHECKED")
@@ -252,9 +244,7 @@ class TestRuntimeSettingsSeeding:
             patch.object(sd, "_USER_ENV", fake_env),
         ):
             sd._persist_setting("VID_DL_APP_UPDATE_AUTO_CHECK", True)
-        assert "VID_DL_APP_UPDATE_AUTO_CHECK=true\n" in fake_env.read_text(
-            encoding="utf-8"
-        )
+        assert "VID_DL_APP_UPDATE_AUTO_CHECK=true\n" in fake_env.read_text(encoding="utf-8")
 
     def test_auto_check_persist_writes_false(self, tmp_path: Path) -> None:
         """_persist_setting writes False as 'false' for the auto-check key."""
@@ -265,9 +255,7 @@ class TestRuntimeSettingsSeeding:
             patch.object(sd, "_USER_ENV", fake_env),
         ):
             sd._persist_setting("VID_DL_APP_UPDATE_AUTO_CHECK", False)
-        assert "VID_DL_APP_UPDATE_AUTO_CHECK=false\n" in fake_env.read_text(
-            encoding="utf-8"
-        )
+        assert "VID_DL_APP_UPDATE_AUTO_CHECK=false\n" in fake_env.read_text(encoding="utf-8")
 
     def test_last_checked_persist_writes_date_string(self, tmp_path: Path) -> None:
         """_persist_setting writes a date ISO string for the last-checked key."""
@@ -278,17 +266,13 @@ class TestRuntimeSettingsSeeding:
             patch.object(sd, "_USER_ENV", fake_env),
         ):
             sd._persist_setting("VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18")
-        assert "VID_DL_APP_UPDATE_LAST_CHECKED=2026-05-18\n" in fake_env.read_text(
-            encoding="utf-8"
-        )
+        assert "VID_DL_APP_UPDATE_LAST_CHECKED=2026-05-18\n" in fake_env.read_text(encoding="utf-8")
 
     def test_last_checked_persist_replaces_existing(self, tmp_path: Path) -> None:
         """_persist_setting replaces an existing last-checked line, not appends."""
         _, sd = self._reload_both()
         fake_env = tmp_path / ".env"
-        fake_env.write_text(
-            "VID_DL_APP_UPDATE_LAST_CHECKED=2026-01-01\n", encoding="utf-8"
-        )
+        fake_env.write_text("VID_DL_APP_UPDATE_LAST_CHECKED=2026-01-01\n", encoding="utf-8")
         with (
             patch.object(sd, "_APPDATA_DIR", tmp_path),
             patch.object(sd, "_USER_ENV", fake_env),
@@ -534,9 +518,7 @@ class TestOnAppUpdateResult:
             patch(_DATE, fake_date),
             patch(_DATETIME, fake_datetime),
         ):
-            win._on_app_update_result(
-                update_available, latest_tag, download_url, auto=auto
-            )
+            win._on_app_update_result(update_available, latest_tag, download_url, auto=auto)
         return win, mock_qmsgbox, mock_persist, mock_web
 
     # ------------------------------------------------------------------
@@ -562,9 +544,7 @@ class TestOnAppUpdateResult:
             download_url="",
             auto=True,
         )
-        mock_persist.assert_called_once_with(
-            "VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18"
-        )
+        mock_persist.assert_called_once_with("VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18")
 
     def test_auto_no_update_does_not_open_browser(self) -> None:
         """auto=True + no update → webbrowser.open NOT called."""
@@ -598,9 +578,7 @@ class TestOnAppUpdateResult:
             download_url="https://example.com/dl",
             auto=True,
         )
-        mock_persist.assert_called_once_with(
-            "VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18"
-        )
+        mock_persist.assert_called_once_with("VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18")
 
     def test_auto_update_user_confirms_opens_browser(self) -> None:
         """auto=True + update + user clicks Yes → webbrowser.open called with url."""
@@ -621,9 +599,7 @@ class TestOnAppUpdateResult:
                 return_value=QMessageBox.StandardButton.Yes,
             ),
         ):
-            win._on_app_update_result(
-                True, "v1.2.3", "https://example.com/dl", auto=True
-            )
+            win._on_app_update_result(True, "v1.2.3", "https://example.com/dl", auto=True)
         mock_web.open.assert_called_once_with("https://example.com/dl")
 
     def test_auto_update_user_declines_no_browser(self) -> None:
@@ -645,9 +621,7 @@ class TestOnAppUpdateResult:
                 return_value=QMessageBox.StandardButton.No,
             ),
         ):
-            win._on_app_update_result(
-                True, "v1.2.3", "https://example.com/dl", auto=True
-            )
+            win._on_app_update_result(True, "v1.2.3", "https://example.com/dl", auto=True)
         mock_web.open.assert_not_called()
 
     # ------------------------------------------------------------------
@@ -727,9 +701,7 @@ class TestOnAppUpdateResult:
                 return_value=QMessageBox.StandardButton.Yes,
             ),
         ):
-            win._on_app_update_result(
-                True, "v9.0.0", "https://example.com/dl", auto=False
-            )
+            win._on_app_update_result(True, "v9.0.0", "https://example.com/dl", auto=False)
         mock_web.open.assert_called_once_with("https://example.com/dl")
 
     # ------------------------------------------------------------------
@@ -744,9 +716,7 @@ class TestOnAppUpdateResult:
             download_url="",
             auto=True,
         )
-        mock_persist.assert_called_once_with(
-            "VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18"
-        )
+        mock_persist.assert_called_once_with("VID_DL_APP_UPDATE_LAST_CHECKED", "2026-05-18")
 
     # ------------------------------------------------------------------
     # Persist date format: must be ISO-8601 (YYYY-MM-DD)

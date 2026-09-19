@@ -108,7 +108,9 @@ class TestDescentFlow:
 
         assert success is True
         assert error == ""
-        assert len(_CallTrackingYDL.opts_list) == 2, f"Expected 2 downloads, got {len(_CallTrackingYDL.opts_list)}"
+        assert len(_CallTrackingYDL.opts_list) == 2, (
+            f"Expected 2 downloads, got {len(_CallTrackingYDL.opts_list)}"
+        )
         # First retry to 1080, second retry to 720 (next enabled below 2160, then below 1080)
         assert "height<=1080" in _CallTrackingYDL.opts_list[0]["format"]
         assert "height<=720" in _CallTrackingYDL.opts_list[1]["format"]
@@ -348,7 +350,9 @@ class TestQmetaPropagation:
     def test_qmeta_absent_does_not_raise(self, call_tracking_ydl) -> None:
         """Options with no qmeta key; retry succeeds; no KeyError."""
         _CallTrackingYDL.opts_list = []
-        _CallTrackingYDL.raise_on_call = 0  # Succeed immediately (only one rung available below 1080)
+        _CallTrackingYDL.raise_on_call = (
+            0  # Succeed immediately (only one rung available below 1080)
+        )
 
         with (
             patch("src.download_executor.ENABLED_RESOLUTIONS", (1080, 720)),
@@ -484,8 +488,11 @@ class TestContainerPropagation:
         assert "[ext=webm]" in fallback_opts["format"]
         assert fallback_opts["merge_output_format"] == "webm"
         remuxer = next(
-            (pp for pp in fallback_opts.get("postprocessors", [])
-             if pp.get("key") == "FFmpegVideoRemuxer"),
+            (
+                pp
+                for pp in fallback_opts.get("postprocessors", [])
+                if pp.get("key") == "FFmpegVideoRemuxer"
+            ),
             None,
         )
         assert remuxer is not None
@@ -505,11 +512,7 @@ class TestRemuxerDedup:
         _CallTrackingYDL.opts_list = []
         _CallTrackingYDL.raise_on_call = 0  # Succeed on first retry
 
-        base_opts = {
-            "postprocessors": [
-                {"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}
-            ]
-        }
+        base_opts = {"postprocessors": [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]}
 
         with (
             patch("src.download_executor.ENABLED_RESOLUTIONS", (1080, 720)),
@@ -529,7 +532,8 @@ class TestRemuxerDedup:
         # First (successful) retry should have exactly one remuxer
         fallback_opts = _CallTrackingYDL.opts_list[0]
         remuxers = [
-            pp for pp in fallback_opts.get("postprocessors", [])
+            pp
+            for pp in fallback_opts.get("postprocessors", [])
             if pp.get("key") == "FFmpegVideoRemuxer"
         ]
         assert len(remuxers) == 1, f"Expected 1 remuxer, got {len(remuxers)}"

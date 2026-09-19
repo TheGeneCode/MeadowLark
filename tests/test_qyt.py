@@ -292,9 +292,7 @@ class TestParseHistoryLog:
         assert len(entries) == 1
         assert entries[0]["title"] == "Good"
 
-    def test_crlf_line_endings_no_trailing_carriage_return(
-        self, tmp_path: Path
-    ) -> None:
+    def test_crlf_line_endings_no_trailing_carriage_return(self, tmp_path: Path) -> None:
         r"""CRLF line endings do not leave a trailing \r in the result field."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_bytes(
@@ -316,9 +314,7 @@ class TestParseHistoryLog:
         assert len(entries) == 1
         assert entries[0]["title"] == "First"
 
-    def test_result_containing_pipe_url_uses_last_occurrence(
-        self, tmp_path: Path
-    ) -> None:
+    def test_result_containing_pipe_url_uses_last_occurrence(self, tmp_path: Path) -> None:
         """When result text contains ' | URL: ', the real URL (last field) is extracted correctly."""
         log_file = tmp_path / "history_log.txt"
         log_file.write_text(
@@ -508,12 +504,8 @@ class TestQYTQueue:
             ydl_queue.run()
 
         assert queue.get.call_count == 3
-        assert any(
-            "Download error" in m and "fails" in m for m in messages
-        )
-        assert any(
-            "Finished downloading" in m and "ok" in m for m in messages
-        )
+        assert any("Download error" in m and "fails" in m for m in messages)
+        assert any("Finished downloading" in m and "ok" in m for m in messages)
 
     def test_extract_title_from_urls(self) -> None:
         """Test _extract_title returns URL if extraction fails."""

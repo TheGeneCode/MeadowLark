@@ -81,7 +81,9 @@ def fake_truetype_factory() -> Callable[..., Callable[..., ImageFont.FreeTypeFon
     def _factory(
         blocked: frozenset[str] = frozenset(),
     ) -> Callable[..., ImageFont.FreeTypeFont]:
-        def _fake(name: object, size: int, *args: object, **kwargs: object) -> ImageFont.FreeTypeFont:
+        def _fake(
+            name: object, size: int, *args: object, **kwargs: object
+        ) -> ImageFont.FreeTypeFont:
             if isinstance(name, str):
                 if name in blocked:
                     msg = f"simulated missing font: {name}"

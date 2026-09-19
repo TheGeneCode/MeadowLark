@@ -136,8 +136,7 @@ def _build_video_format_selector(height: int | None, vfmt: str) -> str:
         # If nothing under the requested height has a VP9 stream, fall back to
         # the best webm at any height rather than failing entirely.
         return (
-            f"bestvideo*{h}[ext=webm]+bestaudio[ext=webm]/"
-            f"bestvideo*[ext=webm]+bestaudio[ext=webm]"
+            f"bestvideo*{h}[ext=webm]+bestaudio[ext=webm]/bestvideo*[ext=webm]+bestaudio[ext=webm]"
         )
     return (
         f"bestvideo*{h}[ext=mp4]+bestaudio[ext=m4a]/"
@@ -161,9 +160,7 @@ def podcast_base_dir() -> str:
     Returns:
         Posix-style path of the directory containing the per-show folders.
     """
-    misc_dir = Path(
-        get_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR") or str(PODCAST_MISC_OUTPUT_DIR)
-    )
+    misc_dir = Path(get_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR") or str(PODCAST_MISC_OUTPUT_DIR))
     return misc_dir.parent.as_posix()
 
 
@@ -199,7 +196,9 @@ def get_source_options(source: str) -> dict[str, Any]:
     vfmt = str(get_setting("VID_DL_VIDEO_FORMAT") or "mp4")
     afmt = str(get_setting("VID_DL_AUDIO_FORMAT") or "m4a")
     video_dir = Path(get_setting("VID_DL_VIDEO_STORAGE_DIR") or str(VIDEO_STORAGE_DIR))
-    podcast_dir = Path(get_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR") or str(PODCAST_MISC_OUTPUT_DIR))
+    podcast_dir = Path(
+        get_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR") or str(PODCAST_MISC_OUTPUT_DIR)
+    )
 
     source_options: dict[str, dict[str, Any]] = {
         "audio": {
@@ -284,6 +283,4 @@ def get_postprocessors(source: str) -> list[dict[str, Any]]:
     Returns:
         A list of yt-dlp postprocessor dictionaries.
     """
-    return get_source_options(source).get(
-        "postprocessors", list(DEFAULT_POSTPROCESSORS)
-    )
+    return get_source_options(source).get("postprocessors", list(DEFAULT_POSTPROCESSORS))

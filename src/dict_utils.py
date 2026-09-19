@@ -68,8 +68,6 @@ def remove_sponsorblock_postprocessor(opts: dict[str, Any]) -> dict[str, Any]:
         return opts_copy
 
     opts_copy["postprocessors"] = [
-        pp
-        for pp in postprocs
-        if not (isinstance(pp, dict) and pp.get("key") == "SponsorBlock")
+        pp for pp in postprocs if not (isinstance(pp, dict) and pp.get("key") == "SponsorBlock")
     ]
     return opts_copy

@@ -121,8 +121,7 @@ HELP_TEXT: dict[str, str] = {
         ".m4a gives the best quality-to-size ratio for most listeners."
     ),
     "VID_DL_ALWAYS_ON_TOP": (
-        "Keep the app window above all other windows.\n"
-        "Changes take effect immediately."
+        "Keep the app window above all other windows.\nChanges take effect immediately."
     ),
     "VID_DL_APP_UPDATE_AUTO_CHECK": (
         "When enabled, the app silently checks for a newer release once per week at startup.\n"
@@ -141,9 +140,7 @@ for _preset in RESOLUTION_PRESETS:
         f"Display text for the {_preset.label} drop target ({_preset.description}).\n"
         "Routing behaviour is unchanged regardless of display text."
     )
-    HELP_TEXT[button_label_key(_preset.height)] = (
-        f"Label for the {_preset.label} Playlists button."
-    )
+    HELP_TEXT[button_label_key(_preset.height)] = f"Label for the {_preset.label} Playlists button."
     HELP_TEXT[playlist_file_key(_preset.height)] = (
         f"Playlist file for {_preset.label} video downloads ({_preset.description}).\n"
         "The file is copied into AppData so the original can be moved or deleted.\n"
@@ -258,9 +255,7 @@ def _make_help_button(key: str, parent: QWidget) -> QPushButton:
     return btn
 
 
-def _make_dir_row(
-    label: str, key: str, parent: QWidget
-) -> tuple[QHBoxLayout, QLineEdit]:
+def _make_dir_row(label: str, key: str, parent: QWidget) -> tuple[QHBoxLayout, QLineEdit]:
     edit = QLineEdit(str(get_setting(key) or ""), parent)
     browse = QPushButton("Browse…", parent)
     help_btn = _make_help_button(key, parent)
@@ -428,9 +423,7 @@ class SettingsDialog(QDialog):
         self._edits["VID_DL_VIDEO_STORAGE_DIR"] = edit
         form.addRow(QLabel("Video directory:"), _wrap(row))
 
-        row, edit = _make_dir_row(
-            "Audio/Podcast Directory", "VID_DL_PODCAST_MISC_OUTPUT_DIR", self
-        )
+        row, edit = _make_dir_row("Audio/Podcast Directory", "VID_DL_PODCAST_MISC_OUTPUT_DIR", self)
         self._edits["VID_DL_PODCAST_MISC_OUTPUT_DIR"] = edit
         form.addRow(QLabel("Audio directory:"), _wrap(row))
 
@@ -462,8 +455,7 @@ class SettingsDialog(QDialog):
         current = enabled_heights()
         specs: list[tuple[str, str, str]] = [
             (
-                f"Playlists file ({p.label}p):"
-                + ("" if p.height in current else "  (hidden)"),
+                f"Playlists file ({p.label}p):" + ("" if p.height in current else "  (hidden)"),
                 playlist_file_key(p.height),
                 p.playlist_filename,
             )
@@ -563,9 +555,7 @@ class SettingsDialog(QDialog):
         interval = QSpinBox(self)
         interval.setRange(5, 1440)
         interval.setSuffix(" min")
-        interval.setValue(
-            int(get_setting("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES") or 60)
-        )
+        interval.setValue(int(get_setting("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES") or 60))
         interval.setEnabled(auto_check.isChecked())
         help_interval = _make_help_button("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES", self)
         interval_row = QHBoxLayout()
@@ -615,9 +605,7 @@ class SettingsDialog(QDialog):
         form.addRow(QLabel("Qt:"), QLabel(qt_version))
 
         # Platform
-        platform_info = (
-            f"{platform.system()} {_get_windows_release()} ({platform.machine()})"
-        )
+        platform_info = f"{platform.system()} {_get_windows_release()} ({platform.machine()})"
         form.addRow(QLabel("Platform:"), QLabel(platform_info))
 
         # Separator
@@ -664,9 +652,7 @@ class SettingsDialog(QDialog):
         # empty — the exact "worse" outcome the empty-selection guard exists to
         # prevent. Nesting makes an empty _resolution_checks a true no-op.
         if self._resolution_checks:
-            checked = tuple(
-                h for h, box in self._resolution_checks.items() if box.isChecked()
-            )
+            checked = tuple(h for h, box in self._resolution_checks.items() if box.isChecked())
             if not checked:
                 QMessageBox.warning(
                     self,

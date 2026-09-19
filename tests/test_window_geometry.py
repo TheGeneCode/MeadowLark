@@ -172,9 +172,7 @@ class TestPodcastStatusWindowGeometry:
             _create_podcast_status_table = vd.MyWindow._create_podcast_status_table
             _on_podcast_status_context_menu = vd.MyWindow._on_podcast_status_context_menu
             _show_podcast_status = vd.MyWindow._show_podcast_status
-            _on_podcast_status_dialog_destroyed = (
-                vd.MyWindow._on_podcast_status_dialog_destroyed
-            )
+            _on_podcast_status_dialog_destroyed = vd.MyWindow._on_podcast_status_dialog_destroyed
 
         return _StubWindow()
 

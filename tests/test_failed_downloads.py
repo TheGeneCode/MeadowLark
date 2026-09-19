@@ -714,7 +714,9 @@ def test_playlist_level_error_records_the_playlist_url_not_the_bare_id(ie: str) 
 def test_tab_error_for_a_non_playlist_id_keeps_the_bare_id() -> None:
     """A channel/handle tab id is not a playlist id, so no playlist URL is invented."""
     hook, captured = _hook_with_capture()
-    hook.record_log_error("ERROR: [youtube:tab] UCuAXFkgsw1L7xaCfnd5JJOw: This channel does not exist")
+    hook.record_log_error(
+        "ERROR: [youtube:tab] UCuAXFkgsw1L7xaCfnd5JJOw: This channel does not exist"
+    )
     hook.flush()
 
     assert captured[0]["urls"] == ["UCuAXFkgsw1L7xaCfnd5JJOw"]
@@ -755,9 +757,9 @@ def test_resolved_exact_url_match() -> None:
 
 def test_resolved_by_video_id_across_spellings() -> None:
     record = make_failed_record(["https://youtu.be/abc123"], _META, "T", "e")
-    assert keys_resolved_by_download(
-        [record], "https://www.youtube.com/watch?v=abc123"
-    ) == [record["key"]]
+    assert keys_resolved_by_download([record], "https://www.youtube.com/watch?v=abc123") == [
+        record["key"]
+    ]
 
 
 def test_resolved_ignores_multi_url_records() -> None:
@@ -895,9 +897,7 @@ def test_logger_is_restored_even_when_execute_raises(
 ) -> None:
     inner_logger = MagicMock()
     queue_obj = QYTQueue(Queue())
-    monkeypatch.setattr(
-        queue_obj.executor, "execute", MagicMock(side_effect=RuntimeError("boom"))
-    )
+    monkeypatch.setattr(queue_obj.executor, "execute", MagicMock(side_effect=RuntimeError("boom")))
     options = {"qmeta": _META, "logger": inner_logger, "ignoreerrors": "only_download"}
 
     with pytest.raises(RuntimeError):

@@ -102,9 +102,7 @@ class TestStartDenoWarmup:
         thread.join(_JOIN_TIMEOUT_S)
         assert seen == {"server_home": home, "scripts_dir": scripts}
 
-    def test_second_call_while_pending_is_a_noop(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_second_call_while_pending_is_a_noop(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A concurrent second start must not launch a second warm-up."""
         release = threading.Event()
         calls: list[int] = []
@@ -122,21 +120,15 @@ class TestStartDenoWarmup:
         first.join(_JOIN_TIMEOUT_S)
         assert len(calls) == 1
 
-    def test_second_call_after_completion_is_a_noop(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_second_call_after_completion_is_a_noop(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Warming is once per process, not once per idle period."""
-        monkeypatch.setattr(
-            pot_provider, "warm_deno_cache", lambda **_k: _ok_result()
-        )
+        monkeypatch.setattr(pot_provider, "warm_deno_cache", lambda **_k: _ok_result())
         thread = start_deno_warmup()
         assert thread is not None
         thread.join(_JOIN_TIMEOUT_S)
         assert start_deno_warmup() is None
 
-    def test_exception_still_releases_waiters(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_exception_still_releases_waiters(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A warm-up that raises must not leave every download blocked."""
 
         def _boom(**_kwargs: object) -> DenoWarmResult:
@@ -161,9 +153,7 @@ class TestWaitForDenoWarm:
         """Callers that never started a warm-up must not block at all."""
         assert wait_for_deno_warm(timeout=_JOIN_TIMEOUT_S) is None
 
-    def test_returns_result_after_completion(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_result_after_completion(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The completed warm-up's result is handed back."""
         result = _ok_result(elapsed=2.25)
         monkeypatch.setattr(pot_provider, "warm_deno_cache", lambda **_k: result)
@@ -198,9 +188,7 @@ class TestWaitForDenoWarm:
         assert thread is not None
         thread.join(_JOIN_TIMEOUT_S)
 
-    def test_waits_for_a_warm_up_in_flight(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_waits_for_a_warm_up_in_flight(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The whole point: a wait that starts mid-warm-up returns the result."""
         release = threading.Event()
         result = _ok_result(elapsed=26.3)
@@ -241,9 +229,7 @@ class TestDenoWarmupPending:
 
     def test_false_after_completion(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Not pending once the warm-up has finished."""
-        monkeypatch.setattr(
-            pot_provider, "warm_deno_cache", lambda **_k: _ok_result()
-        )
+        monkeypatch.setattr(pot_provider, "warm_deno_cache", lambda **_k: _ok_result())
         thread = start_deno_warmup()
         assert thread is not None
         thread.join(_JOIN_TIMEOUT_S)
@@ -283,9 +269,7 @@ class TestWarmupConcurrencyStress:
             barrier.wait()
             results[slot] = start_deno_warmup()
 
-        workers = [
-            threading.Thread(target=_worker, args=(i,)) for i in range(n_threads)
-        ]
+        workers = [threading.Thread(target=_worker, args=(i,)) for i in range(n_threads)]
         for w in workers:
             w.start()
         for w in workers:
@@ -318,9 +302,7 @@ class TestWarmupConcurrencyStress:
         def _wait(slot: int) -> None:
             outcomes[slot] = wait_for_deno_warm(timeout=_JOIN_TIMEOUT_S)
 
-        waiters = [
-            threading.Thread(target=_wait, args=(i,)) for i in range(n_waiters)
-        ]
+        waiters = [threading.Thread(target=_wait, args=(i,)) for i in range(n_waiters)]
         for w in waiters:
             w.start()
         # Let every waiter actually reach Event.wait() before releasing, so this

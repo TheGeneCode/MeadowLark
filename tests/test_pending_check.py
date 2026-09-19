@@ -240,9 +240,7 @@ def test_audio_playlists_uses_podcast_outtmpl_from_label(tmp_path: Path) -> None
     path = tmp_path / "pending_queue.json"
     seed(
         path,
-        make_pending_record(
-            "https://yt.com/watch?v=x", "audio_playlists", label="My Show"
-        ),
+        make_pending_record("https://yt.com/watch?v=x", "audio_playlists", label="My Show"),
     )
     enqueue = Mock()
     deps = make_deps(
@@ -267,9 +265,7 @@ def test_non_podcast_source_keeps_get_options_outtmpl(tmp_path: Path) -> None:
         tmp_path,
         path=path,
         enqueue=enqueue,
-        get_options=lambda _urls, _source: {
-            "outtmpl": "/videos/%(playlist)s/%(title)s.%(ext)s"
-        },
+        get_options=lambda _urls, _source: {"outtmpl": "/videos/%(playlist)s/%(title)s.%(ext)s"},
         ydl_class=make_ydl_class(const({"live_status": "was_live"})),
     )
 
@@ -283,9 +279,7 @@ def test_playlist_comments_added_only_when_playlist_id_present(tmp_path: Path) -
     path_with = tmp_path / "with.json"
     seed(
         path_with,
-        make_pending_record(
-            "https://yt.com/watch?v=x", "1080playlists", playlist_id="PLxyz"
-        ),
+        make_pending_record("https://yt.com/watch?v=x", "1080playlists", playlist_id="PLxyz"),
     )
     enqueue_with = Mock()
     deps_with = make_deps(
@@ -485,9 +479,7 @@ def test_contradictory_is_live_true_overrides_upcoming_status_kind_classificatio
     deps = make_deps(
         tmp_path,
         path=path,
-        ydl_class=make_ydl_class(
-            const({"is_live": True, "live_status": "is_upcoming"})
-        ),
+        ydl_class=make_ydl_class(const({"is_live": True, "live_status": "is_upcoming"})),
     )
 
     result = check_pending_queue(deps)
@@ -568,9 +560,7 @@ def test_refresh_empty_string_title_does_not_clobber_existing_title(
 ) -> None:
     """An empty-string title from the probe is falsy and must not overwrite a real title."""
     path = tmp_path / "pending_queue.json"
-    record = make_pending_record(
-        "https://yt.com/watch?v=x", "1080playlists", title="Real Title"
-    )
+    record = make_pending_record("https://yt.com/watch?v=x", "1080playlists", title="Real Title")
     seed(path, record)
     deps = make_deps(
         tmp_path,

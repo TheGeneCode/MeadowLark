@@ -33,9 +33,7 @@ class _StubWindow(QWidget):
         self._settings_dialog: QDialog | None = None
 
     _show_podcast_status = meadowlark.MyWindow._show_podcast_status
-    _on_podcast_status_dialog_destroyed = (
-        meadowlark.MyWindow._on_podcast_status_dialog_destroyed
-    )
+    _on_podcast_status_dialog_destroyed = meadowlark.MyWindow._on_podcast_status_dialog_destroyed
     _show_history = meadowlark.MyWindow._show_history
     _on_history_dialog_destroyed = meadowlark.MyWindow._on_history_dialog_destroyed
     _open_settings = meadowlark.MyWindow._open_settings

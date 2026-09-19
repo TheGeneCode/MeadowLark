@@ -500,7 +500,9 @@ def test_partial_last_row_places_widgets_without_collision(tmp_path: Path) -> No
     # Visual row 1 (grid rows 2/3): only the audio cell, at column 0.
     audio_container = _widget_at(grid, 2, 0)
     assert audio_container is not None
-    assert window.buttonAudioPlaylists in audio_container.findChildren(type(window.buttonAudioPlaylists))
+    assert window.buttonAudioPlaylists in audio_container.findChildren(
+        type(window.buttonAudioPlaylists)
+    )
     assert _widget_at(grid, 3, 0) is window.labelAudio
     # Columns 1 and 2 of the partial row must be empty, not reused.
     assert _widget_at(grid, 2, 1) is None

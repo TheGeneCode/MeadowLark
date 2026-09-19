@@ -284,13 +284,25 @@ class TestBuildBaseYdlOptsMarkWatched:
     def test_setting_false_other_keys_intact(self) -> None:
         """Disabling mark_watched must not remove any other base keys."""
         opts = self._call(False)
-        for required_key in ("logger", "progress_hooks", "windowsfilenames", "cookiefile", "postprocessors"):
+        for required_key in (
+            "logger",
+            "progress_hooks",
+            "windowsfilenames",
+            "cookiefile",
+            "postprocessors",
+        ):
             assert required_key in opts, f"Expected key '{required_key}' missing from opts"
 
     def test_setting_true_other_keys_intact(self) -> None:
         """Enabling mark_watched must not remove any other base keys."""
         opts = self._call(True)
-        for required_key in ("logger", "progress_hooks", "windowsfilenames", "cookiefile", "postprocessors"):
+        for required_key in (
+            "logger",
+            "progress_hooks",
+            "windowsfilenames",
+            "cookiefile",
+            "postprocessors",
+        ):
             assert required_key in opts, f"Expected key '{required_key}' missing from opts"
 
     def test_setting_truthy_non_bool_string_true(self) -> None:

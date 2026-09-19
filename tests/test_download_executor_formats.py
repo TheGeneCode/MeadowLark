@@ -288,9 +288,7 @@ class TestFallbackToDefaults:
         assert "None" not in opts["format"]
 
     @pytest.mark.parametrize("vfmt", [None, ""])
-    def test_none_or_empty_vfmt_falls_back_to_mp4_for_merge_output_format(
-        self, vfmt: Any
-    ) -> None:
+    def test_none_or_empty_vfmt_falls_back_to_mp4_for_merge_output_format(self, vfmt: Any) -> None:
         opts = _run_fallback_and_capture_options(vfmt, "m4a", {})
         assert opts["merge_output_format"] == "mp4"
         assert opts["merge_output_format"] is not None
@@ -567,14 +565,10 @@ class TestRemuxvideoKeyInFallback:
 
     def test_no_duplicate_remuxer_when_base_opts_already_has_remuxer(self) -> None:
         """If base_opts already has FFmpegVideoRemuxer, _modify() must not add a second one."""
-        base_opts = {
-            "postprocessors": [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
-        }
+        base_opts = {"postprocessors": [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]}
         opts = _run_fallback_and_capture_options("mp4", "m4a", base_opts)
         remuxers = [
-            pp
-            for pp in opts.get("postprocessors", [])
-            if pp.get("key") == "FFmpegVideoRemuxer"
+            pp for pp in opts.get("postprocessors", []) if pp.get("key") == "FFmpegVideoRemuxer"
         ]
         assert len(remuxers) == 1, (
             f"Expected exactly 1 remuxer, got {len(remuxers)}. "
@@ -583,7 +577,13 @@ class TestRemuxvideoKeyInFallback:
 
     def test_remuxer_is_last_postprocessor_in_fallback(self) -> None:
         """FFmpegVideoRemuxer must be the final entry so it runs after SponsorBlock."""
-        base_opts = {"postprocessors": list(__import__("src.dict_utils", fromlist=["DEFAULT_POSTPROCESSORS"]).DEFAULT_POSTPROCESSORS)}
+        base_opts = {
+            "postprocessors": list(
+                __import__(
+                    "src.dict_utils", fromlist=["DEFAULT_POSTPROCESSORS"]
+                ).DEFAULT_POSTPROCESSORS
+            )
+        }
         opts = _run_fallback_and_capture_options("mp4", "m4a", base_opts)
         pps = opts.get("postprocessors", [])
         assert pps, "postprocessors list is empty"

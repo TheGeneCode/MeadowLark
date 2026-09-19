@@ -43,9 +43,7 @@ def get_publish_date() -> str | None:
 
 _PYPI_API_TIMEOUT: int = 3
 _GITHUB_API_TIMEOUT: int = 5
-_GITHUB_RELEASES_URL: str = (
-    "https://api.github.com/repos/TheGeneCode/MeadowLark/releases"
-)
+_GITHUB_RELEASES_URL: str = "https://api.github.com/repos/TheGeneCode/MeadowLark/releases"
 
 
 def normalize_version(version: str | None) -> tuple[int, ...]:

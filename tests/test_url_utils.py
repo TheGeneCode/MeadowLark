@@ -13,7 +13,10 @@ from src.url_utils import extract_playlist_id, extract_video_id, web_url
         ("https://example.com/v", "https://example.com/v"),
         ("http://example.com/v", "http://example.com/v"),
         ("  https://example.com/v  ", "https://example.com/v"),  # padding stripped
-        ("HTTPS://EXAMPLE.COM/v", "HTTPS://EXAMPLE.COM/v"),  # case-insensitive scheme, case preserved
+        (
+            "HTTPS://EXAMPLE.COM/v",
+            "HTTPS://EXAMPLE.COM/v",
+        ),  # case-insensitive scheme, case preserved
     ],
 )
 def test_web_url_accepts_and_normalizes_http_urls(value: str, expected: str) -> None:

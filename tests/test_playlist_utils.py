@@ -220,9 +220,7 @@ def test_playlist_file_for_new_rung() -> None:
 def test_playlist_file_setting_overrides_default() -> None:
     with patch(
         "src.playlist_utils.get_setting",
-        side_effect=lambda key: (
-            "C:/tmp/x.txt" if key == "VID_DL_PLAYLISTS_2160_FILE" else None
-        ),
+        side_effect=lambda key: "C:/tmp/x.txt" if key == "VID_DL_PLAYLISTS_2160_FILE" else None,
     ):
         result = get_playlist_file_for_source("2160playlists")
     assert result == "C:/tmp/x.txt"
@@ -253,9 +251,7 @@ def test_load_playlist_comments_valid_source_missing_file_returns_empty() -> Non
 
 def test_load_playlist_comments_extracts_comment_before_url(tmp_path: Path) -> None:
     playlist_file = tmp_path / "playlists.txt"
-    playlist_file.write_text(
-        "#My Comment\nhttps://www.youtube.com/playlist?list=PLabc123\n"
-    )
+    playlist_file.write_text("#My Comment\nhttps://www.youtube.com/playlist?list=PLabc123\n")
     with patch(
         "src.playlist_utils.get_playlist_file_for_source",
         return_value=str(playlist_file),

@@ -32,9 +32,7 @@ def test_mf_none_info_calls_log_exception_and_returns_none() -> None:
 
 def test_mf_normal_video_returns_none() -> None:
     mf = _make_mf()
-    result = mf(
-        {"is_live": False, "live_status": "not_live", "availability": "public"}, False
-    )
+    result = mf({"is_live": False, "live_status": "not_live", "availability": "public"}, False)
     assert result is None
 
 
@@ -90,9 +88,7 @@ def test_mf_live_falls_back_to_original_url() -> None:
         },
         False,
     )
-    add_fn.assert_called_once_with(
-        "https://youtube.com/watch?v=orig", "1080playlists", None
-    )
+    add_fn.assert_called_once_with("https://youtube.com/watch?v=orig", "1080playlists", None)
 
 
 def test_mf_live_falls_back_to_url_key() -> None:
@@ -106,9 +102,7 @@ def test_mf_live_falls_back_to_url_key() -> None:
         },
         False,
     )
-    add_fn.assert_called_once_with(
-        "https://youtube.com/watch?v=fallback", "1080playlists", None
-    )
+    add_fn.assert_called_once_with("https://youtube.com/watch?v=fallback", "1080playlists", None)
 
 
 def test_mf_add_fn_raises_os_error_returns_none_and_logs() -> None:
@@ -159,9 +153,7 @@ def test_mf_playlist_id_passed_to_add_fn() -> None:
         },
         False,
     )
-    add_fn.assert_called_once_with(
-        "https://youtube.com/watch?v=abc", "720playlists", "PLxyz123"
-    )
+    add_fn.assert_called_once_with("https://youtube.com/watch?v=abc", "720playlists", "PLxyz123")
 
 
 def test_mf_empty_dict_returns_none() -> None:
@@ -239,9 +231,7 @@ def test_mf_needs_auth_and_is_live_queues_and_returns_skip_message() -> None:
         False,
     )
     assert result == "Skipping live; queued for later"
-    add_fn.assert_called_once_with(
-        "https://youtube.com/watch?v=auth_live", "1080playlists", None
-    )
+    add_fn.assert_called_once_with("https://youtube.com/watch?v=auth_live", "1080playlists", None)
 
 
 def test_mf_scheduled_takes_priority_over_live_status() -> None:

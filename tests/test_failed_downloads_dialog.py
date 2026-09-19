@@ -76,9 +76,7 @@ def test_buttons_disabled_without_selection() -> None:
 
 def test_retry_emits_full_record() -> None:
     record = _record()
-    with patch(
-        "src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}
-    ):
+    with patch("src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}):
         dialog = FailedDownloadsDialog([record])
         dialog._table.selectRow(0)
 
@@ -379,7 +377,10 @@ def test_selection_cleared_when_shrunk_to_empty() -> None:
 # --- count label / record-count boundary ---
 
 
-@pytest.mark.parametrize(("count", "expected"), [(0, "0 failed download(s)"), (1, "1 failed download(s)"), (3, "3 failed download(s)")])
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(0, "0 failed download(s)"), (1, "1 failed download(s)"), (3, "3 failed download(s)")],
+)
 def test_count_label_text(count: int, expected: str) -> None:
     records = [_record(key=str(i)) for i in range(count)]
     dialog = FailedDownloadsDialog(records)
@@ -392,9 +393,7 @@ def test_count_label_text(count: int, expected: str) -> None:
 
 def test_retry_emits_all_selected_records() -> None:
     record_a, record_b, record_c = _record(key="a"), _record(key="b"), _record(key="c")
-    with patch(
-        "src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}
-    ):
+    with patch("src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}):
         dialog = FailedDownloadsDialog([record_a, record_b, record_c])
         _select_rows(dialog, 0, 2)
 
@@ -440,9 +439,7 @@ def test_mark_downloaded_acts_on_eligible_subset() -> None:
 
 def test_single_selection_labels_have_no_count() -> None:
     record = _record()
-    with patch(
-        "src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}
-    ):
+    with patch("src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}):
         dialog = FailedDownloadsDialog([record])
         dialog._table.selectRow(0)
 
@@ -500,9 +497,7 @@ def test_unicode_and_long_title_rendered_and_tooltip_preserved() -> None:
 
 def test_context_menu_action_triggers_the_matching_signal() -> None:
     record = _record(key="ctx", urls=["https://www.youtube.com/watch?v=abc123"])
-    with patch(
-        "src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}
-    ):
+    with patch("src.failed_downloads_dialog.get_source_options", return_value={"format": "best"}):
         dialog = FailedDownloadsDialog([record])
         dialog._table.selectRow(0)
 

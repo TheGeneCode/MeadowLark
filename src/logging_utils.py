@@ -94,9 +94,7 @@ def get_ytdlp_debug_logger() -> logging.Logger | None:
             log_exception(exc, "Could not open the yt-dlp debug log")
             return None
 
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)-7s %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(message)s"))
         debug_logger.addHandler(handler)
         debug_logger.setLevel(logging.DEBUG)
         debug_logger.propagate = False

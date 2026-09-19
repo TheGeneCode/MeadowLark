@@ -30,9 +30,7 @@ def test_parse_video_timestamp_uses_upload_date_as_fallback() -> None:
     entry = {"upload_date": "20240301"}
     result = parse_video_timestamp(entry)
     assert isinstance(result, float)
-    assert (
-        datetime.fromtimestamp(result, tz=UTC).strftime("%Y%m%d") == "20240301"
-    )
+    assert datetime.fromtimestamp(result, tz=UTC).strftime("%Y%m%d") == "20240301"
 
 
 def test_parse_video_timestamp_invalid_upload_date_returns_none() -> None:
@@ -175,10 +173,7 @@ def test_parse_video_id_from_error_empty_string_returns_none() -> None:
 
 def test_parse_video_id_from_error_multiple_youtube_tags_returns_first() -> None:
     """When two [youtube] patterns appear, the first 11-char ID is returned."""
-    err = (
-        "ERROR: [youtube] AAAAAAAAAAA: first error; "
-        "[youtube] BBBBBBBBBBB: second error"
-    )
+    err = "ERROR: [youtube] AAAAAAAAAAA: first error; [youtube] BBBBBBBBBBB: second error"
     assert parse_video_id_from_error(err) == "AAAAAAAAAAA"
 
 

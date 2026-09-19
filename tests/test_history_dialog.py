@@ -129,9 +129,7 @@ class TestRefreshArchiveStylesFor:
         assert _is_row_blue(dialog, 1)
 
     def test_clears_blue_from_all_matching_rows(self) -> None:
-        dialog = _make_dialog(
-            [_record(_YT_URL_1), _record(_YT_URL_1)], archive_ids={_VIDEO_ID_1}
-        )
+        dialog = _make_dialog([_record(_YT_URL_1), _record(_YT_URL_1)], archive_ids={_VIDEO_ID_1})
         assert _is_row_blue(dialog, 0)
         assert _is_row_blue(dialog, 1)
         dialog._archive_ids.discard(_VIDEO_ID_1)
@@ -150,7 +148,7 @@ class TestRefreshArchiveStylesFor:
         dialog._archive_ids.discard(_VIDEO_ID_1)
         dialog._refresh_archive_styles_for(_VIDEO_ID_1)
         assert not _is_row_blue(dialog, 0)  # video1 cleared
-        assert _is_row_blue(dialog, 1)      # video2 unaffected
+        assert _is_row_blue(dialog, 1)  # video2 unaffected
 
 
 class TestPrependRowArchive:
@@ -172,9 +170,7 @@ class TestPrependRowArchive:
     def test_skipped_new_row_is_blue_because_already_in_archive(self) -> None:
         dialog = _make_dialog([_record(_YT_URL_2, result="FAIL")], archive_ids=set())
         # SKIPPED means it was already in the archive file
-        with patch(
-            "src.history_dialog.load_downloaded_video_ids", return_value={_VIDEO_ID_1}
-        ):
+        with patch("src.history_dialog.load_downloaded_video_ids", return_value={_VIDEO_ID_1}):
             dialog.prepend_row(_record(_YT_URL_1, result="SKIPPED (Already downloaded)"))
         assert _is_row_blue(dialog, 0)
 
@@ -194,9 +190,7 @@ class TestDeleteFromArchiveMultiRow:
         archive_file = tmp_path / "archive.txt"
         archive_file.write_text(f"youtube {_VIDEO_ID_1}\n", encoding="utf-8")
 
-        dialog = _make_dialog(
-            [_record(_YT_URL_1), _record(_YT_URL_1)], archive_ids={_VIDEO_ID_1}
-        )
+        dialog = _make_dialog([_record(_YT_URL_1), _record(_YT_URL_1)], archive_ids={_VIDEO_ID_1})
         assert _is_row_blue(dialog, 0)
         assert _is_row_blue(dialog, 1)
 
@@ -208,9 +202,7 @@ class TestDeleteFromArchiveMultiRow:
 
     def test_other_video_rows_stay_blue_after_delete(self, tmp_path: Path) -> None:
         archive_file = tmp_path / "archive.txt"
-        archive_file.write_text(
-            f"youtube {_VIDEO_ID_1}\nyoutube {_VIDEO_ID_2}\n", encoding="utf-8"
-        )
+        archive_file.write_text(f"youtube {_VIDEO_ID_1}\nyoutube {_VIDEO_ID_2}\n", encoding="utf-8")
 
         dialog = _make_dialog(
             [_record(_YT_URL_1), _record(_YT_URL_2)],
@@ -223,4 +215,4 @@ class TestDeleteFromArchiveMultiRow:
             dialog._delete_from_archive(_VIDEO_ID_1)
 
         assert not _is_row_blue(dialog, 0)  # video1 deleted
-        assert _is_row_blue(dialog, 1)      # video2 untouched
+        assert _is_row_blue(dialog, 1)  # video2 untouched

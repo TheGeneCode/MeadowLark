@@ -32,9 +32,7 @@ def test_genuine_failure_is_not_not_yet_released() -> None:
 
 
 def test_private_video_is_not_not_yet_released() -> None:
-    assert (
-        is_not_yet_released("Private video. Sign in if you've been granted access") is False
-    )
+    assert is_not_yet_released("Private video. Sign in if you've been granted access") is False
 
 
 def test_empty_and_none_error_are_not_not_yet_released() -> None:

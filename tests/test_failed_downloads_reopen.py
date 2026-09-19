@@ -51,9 +51,7 @@ def test_dead_cached_dialog_falls_through_to_a_new_one(
     win = _make_window(dialog)
 
     replacement = MagicMock()
-    monkeypatch.setattr(
-        meadowlark, "FailedDownloadsDialog", lambda *_args, **_kwargs: replacement
-    )
+    monkeypatch.setattr(meadowlark, "FailedDownloadsDialog", lambda *_args, **_kwargs: replacement)
     monkeypatch.setattr(meadowlark, "load_failed_downloads", lambda _path: [])
 
     win._show_failed_downloads()

@@ -29,9 +29,7 @@ class TestFetchLatestAccessibleEntry:
     """Tests for fetch_latest_accessible_entry function."""
 
     @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
-    def test_extraction_carries_pot_provider_wiring(
-        self, mock_ydl_class: MagicMock
-    ) -> None:
+    def test_extraction_carries_pot_provider_wiring(self, mock_ydl_class: MagicMock) -> None:
         """
         Metadata extraction must carry the shared PO-token provider wiring.
 
@@ -87,9 +85,9 @@ class TestFetchLatestAccessibleEntry:
         assert mock_ydl_class.call_count == 2
         for call in mock_ydl_class.call_args_list:
             opts = call.args[0]
-            assert opts["extractor_args"]["youtubepot-bgutilscript"][
-                "server_home"
-            ] == [str(POT_PROVIDER_SERVER_HOME)]
+            assert opts["extractor_args"]["youtubepot-bgutilscript"]["server_home"] == [
+                str(POT_PROVIDER_SERVER_HOME)
+            ]
         # playlist_items must increment per retry, proving each call rebuilds
         # (rather than reuses/caches) the merged opts.
         assert mock_ydl_class.call_args_list[0].args[0]["playlist_items"] == "1"

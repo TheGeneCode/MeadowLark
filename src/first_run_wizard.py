@@ -35,8 +35,7 @@ class FirstRunWizard(QDialog):
 
         layout.addWidget(
             QLabel(
-                "<b>Welcome to MeadowLark!</b><br><br>"
-                "Where should downloaded videos be saved?",
+                "<b>Welcome to MeadowLark!</b><br><br>Where should downloaded videos be saved?",
             ),
         )
         vid_row = QHBoxLayout()

@@ -284,9 +284,7 @@ class TestResolveCookiefile:
             resolved = resolve_cookiefile()
         assert resolved == str(real.resolve())
 
-    def test_directory_instead_of_file_is_returned_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_directory_instead_of_file_is_returned_unchanged(self, tmp_path: Path) -> None:
         """
         No file-type validation: a directory resolves like any other path.
 

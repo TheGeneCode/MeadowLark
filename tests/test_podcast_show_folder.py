@@ -129,11 +129,7 @@ def test_window_check_pending_queue_restores_show_folder(tmp_path: Path) -> None
     path = tmp_path / "pending_queue.json"
     save_pending_queue(
         path,
-        [
-            make_pending_record(
-                "https://youtube.com/watch?v=ended", "audio_playlists", label=SHOW
-            )
-        ],
+        [make_pending_record("https://youtube.com/watch?v=ended", "audio_playlists", label=SHOW)],
     )
 
     queued: list = []
@@ -194,9 +190,11 @@ def test_grouped_podcast_batch_binds_show_label_to_match_filter(
         _queue_podcast_downloads_grouped = vd.MyWindow._queue_podcast_downloads_grouped
 
         def _fork_download_context(self, base_opts: dict):
-            return SimpleNamespace(info_changed=None), SimpleNamespace(
-                message_changed=None
-            ), dict(base_opts)
+            return (
+                SimpleNamespace(info_changed=None),
+                SimpleNamespace(message_changed=None),
+                dict(base_opts),
+            )
 
         def _wire_download_signals(self, _qhook, _qlogger) -> None:
             pass

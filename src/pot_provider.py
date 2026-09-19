@@ -60,10 +60,7 @@ class PotProviderStatus:
     @property
     def ok(self) -> bool:
         return (
-            self.plugin_installed
-            and self.deno_ok
-            and self.script_found
-            and self.node_modules_found
+            self.plugin_installed and self.deno_ok and self.script_found and self.node_modules_found
         )
 
     def summary(self) -> str:

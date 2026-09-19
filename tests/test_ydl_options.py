@@ -53,10 +53,7 @@ class TestBuildSharedExtractionOpts:
         second = build_shared_extraction_opts()
 
         assert first["extractor_args"] is not second["extractor_args"]
-        assert (
-            first["extractor_args"]["youtube"]
-            is not second["extractor_args"]["youtube"]
-        )
+        assert first["extractor_args"]["youtube"] is not second["extractor_args"]["youtube"]
         assert (
             first["extractor_args"]["youtubepot-bgutilscript"]
             is not second["extractor_args"]["youtubepot-bgutilscript"]

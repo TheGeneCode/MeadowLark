@@ -300,7 +300,8 @@ def test_make_pending_record_kind_premiere() -> None:
 
 
 def test_load_pending_queue_oserror_on_read_returns_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = tmp_path / "pending.json"
     store.write_text("[]", encoding="utf-8")
@@ -313,7 +314,8 @@ def test_load_pending_queue_oserror_on_read_returns_empty(
 
 
 def test_save_pending_queue_oserror_on_write_leaves_no_tmp(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = tmp_path / "pending.json"
 
@@ -328,7 +330,8 @@ def test_save_pending_queue_oserror_on_write_leaves_no_tmp(
 
 
 def test_save_pending_queue_oserror_on_replace_cleans_up_tmp(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = tmp_path / "pending.json"
 
@@ -420,13 +423,12 @@ def test_migrate_legacy_overwrites_stale_already_migrated_file(tmp_path: Path) -
 
     result = migrate_legacy_live_queue(legacy_path, store)
     assert result is True
-    assert migrated_path.read_text(encoding="utf-8") == (
-        "audio_playlists|https://y/1||Show\n"
-    )
+    assert migrated_path.read_text(encoding="utf-8") == ("audio_playlists|https://y/1||Show\n")
 
 
 def test_migrate_legacy_oserror_reading_legacy_file_returns_false(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     legacy_path = tmp_path / "live_queue.txt"
     store = tmp_path / "pending.json"
@@ -446,7 +448,8 @@ def test_migrate_legacy_oserror_reading_legacy_file_returns_false(
 
 
 def test_migrate_legacy_oserror_on_rename_still_reports_true_but_file_stays(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     legacy_path = tmp_path / "live_queue.txt"
     store = tmp_path / "pending.json"
@@ -493,7 +496,8 @@ def test_remove_pending_many_duplicate_urls_in_input_still_removes_once(store: P
 
 
 def test_remove_pending_many_no_matching_urls_skips_write(
-    store: Path, monkeypatch: pytest.MonkeyPatch,
+    store: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When nothing in the batch matches, save_pending_queue must not be called (one-write contract)."""
     upsert_pending(store, make_pending_record("https://y/keep", "youtube"))

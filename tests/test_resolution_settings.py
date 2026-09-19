@@ -297,9 +297,7 @@ class TestHelpTextCoverage:
 
 
 class TestApplyGuardWithoutResolutionsTab:
-    def test_apply_skips_resolution_block_when_no_checks_present(
-        self, tmp_path: Path
-    ) -> None:
+    def test_apply_skips_resolution_block_when_no_checks_present(self, tmp_path: Path) -> None:
         """
         Empty _resolution_checks must make the whole resolution block a no-op.
 
@@ -370,9 +368,7 @@ class TestApplyCombinedChanges:
 
 
 class TestPersistReplacesExistingLine:
-    def test_apply_replaces_existing_enabled_resolutions_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_apply_replaces_existing_enabled_resolutions_line(self, tmp_path: Path) -> None:
         sd._init_runtime_settings()
         fake_env = tmp_path / ".env"
         fake_env.write_text(

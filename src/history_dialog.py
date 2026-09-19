@@ -135,9 +135,7 @@ class HistoryDialog(QDialog):
 
         return table
 
-    def _apply_archive_style_to(
-        self, table: QTableWidget, row: int, *, in_archive: bool
-    ) -> None:
+    def _apply_archive_style_to(self, table: QTableWidget, row: int, *, in_archive: bool) -> None:
         brush = QBrush(_ARCHIVED_FG) if in_archive else QBrush()
         for col in range(table.columnCount()):
             item = table.item(row, col)
@@ -225,9 +223,7 @@ class HistoryDialog(QDialog):
             tmp_path.replace(ARCHIVE_PATH)
         except OSError as exc:
             log_exception(exc, "HistoryDialog: write archive")
-            QMessageBox.warning(
-                self, "Archive Error", f"Could not update archive:\n{exc}"
-            )
+            QMessageBox.warning(self, "Archive Error", f"Could not update archive:\n{exc}")
             tmp_path.unlink(missing_ok=True)
             return
 

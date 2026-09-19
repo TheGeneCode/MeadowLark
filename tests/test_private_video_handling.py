@@ -252,12 +252,10 @@ def test_filter_audio_playlist_urls_with_private(monkeypatch):
         _classify_episode_by_age = vd.MyWindow._classify_episode_by_age
 
     win = DummyWin()
-    to_download, pending, had_error, messages, statuses = (
-        vd.MyWindow._filter_audio_playlist_urls(
-            win,
-            ["http://fake-playlist"],
-            {},
-        )
+    to_download, pending, had_error, messages, statuses = vd.MyWindow._filter_audio_playlist_urls(
+        win,
+        ["http://fake-playlist"],
+        {},
     )
     assert had_error is False
     assert any("private" in m.lower() for m in messages)
@@ -411,6 +409,4 @@ def test_download_retries_without_sponsorblock(monkeypatch):
     # Verify retry options were marked and SponsorBlock was removed
     retry_opts = DummyYDL.inst_opts[-1]
     assert retry_opts.get("_tried_without_sponsorblock") is True
-    assert all(
-        pp.get("key") != "SponsorBlock" for pp in retry_opts.get("postprocessors", [])
-    )
+    assert all(pp.get("key") != "SponsorBlock" for pp in retry_opts.get("postprocessors", []))

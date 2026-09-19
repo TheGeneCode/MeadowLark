@@ -180,9 +180,7 @@ class HistoryLogger:
         result: str,
         url: str | None = None,
     ) -> str:
-        line = (
-            f"[{dt}] Site: {site} | Type: {dtype} | Title: {title} | Result: {result}"
-        )
+        line = f"[{dt}] Site: {site} | Type: {dtype} | Title: {title} | Result: {result}"
         if url:
             line += f" | URL: {url}"
         return line + "\n"
@@ -241,7 +239,16 @@ class HistoryLogger:
         HistoryLogger._write_history_entry(dt, site, dtype, title, result, url)
         if self._on_log is not None:
             try:
-                self._on_log({"dt": dt, "site": site, "dtype": dtype, "title": title, "result": result, "url": url})
+                self._on_log(
+                    {
+                        "dt": dt,
+                        "site": site,
+                        "dtype": dtype,
+                        "title": title,
+                        "result": result,
+                        "url": url,
+                    }
+                )
             except (RuntimeError, AttributeError, TypeError, OSError) as exc:
                 utils.log_exception(exc, "HistoryLogger: on_log callback failed")
 
@@ -260,7 +267,16 @@ class HistoryLogger:
         HistoryLogger._write_history_entry(dt, site, dtype, title, result)
         if self._on_log is not None:
             try:
-                self._on_log({"dt": dt, "site": site, "dtype": dtype, "title": title, "result": result, "url": None})
+                self._on_log(
+                    {
+                        "dt": dt,
+                        "site": site,
+                        "dtype": dtype,
+                        "title": title,
+                        "result": result,
+                        "url": None,
+                    }
+                )
             except (RuntimeError, AttributeError, TypeError, OSError) as exc:
                 utils.log_exception(exc, "HistoryLogger: on_log callback failed")
 
@@ -372,10 +388,7 @@ class HistoryHook:
 
             postproc = (d.get("postprocessor") or "").lower()
             title = (
-                info.get("title")
-                or info.get("_filename")
-                or info.get("id")
-                or "(unknown title)"
+                info.get("title") or info.get("_filename") or info.get("id") or "(unknown title)"
             )
             site = self._infer_site(info)
             dtype = self.meta.get("type") or self.meta.get("source") or "unknown"
@@ -455,16 +468,10 @@ class QYTQueue(QThread):
                 # raise subprocess.TimeoutExpired), so the set of exception types
                 # crossing this boundary is not enumerable in advance.
                 except Exception as exc:
-                    utils.log_exception(
-                        exc, f"QYTQueue.run: unhandled error for {item[0]}"
-                    )
-                    self.message_changed.emit(
-                        f"------  Download error  ------\n{item[0]}"
-                    )
+                    utils.log_exception(exc, f"QYTQueue.run: unhandled error for {item[0]}")
+                    self.message_changed.emit(f"------  Download error  ------\n{item[0]}")
                     # Title is the URL here: no network title lookup in the crash path.
-                    qmeta = (
-                        (item[1] or {}).get("qmeta") if isinstance(item[1], dict) else {}
-                    )
+                    qmeta = (item[1] or {}).get("qmeta") if isinstance(item[1], dict) else {}
                     first_url = item[0][0] if item[0] else "(unknown)"
                     self.download_failed.emit(
                         make_failed_record(
@@ -531,9 +538,7 @@ class QYTQueue(QThread):
             progress_hooks.append(HistoryHook(options.get("qmeta"), logger=history_logger))
             # Captures per-entry errors that ignoreerrors="only_download" swallows
             # during playlist runs, so they never reach the `if not success` path.
-            failure_hook = FailureHook(
-                options.get("qmeta"), on_failure=self.download_failed.emit
-            )
+            failure_hook = FailureHook(options.get("qmeta"), on_failure=self.download_failed.emit)
             progress_hooks.append(failure_hook)
             options["progress_hooks"] = progress_hooks
 
@@ -549,9 +554,7 @@ class QYTQueue(QThread):
                 base_logger is not None
             )
             if capture_extraction_errors:
-                options["logger"] = ErrorCapturingLogger(
-                    base_logger, failure_hook.record_log_error
-                )
+                options["logger"] = ErrorCapturingLogger(base_logger, failure_hook.record_log_error)
 
             # Delegate download to executor
             try:

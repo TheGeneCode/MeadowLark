@@ -132,12 +132,8 @@ def test_all_unknown_release_at_records_preserve_relative_order() -> None:
 
 
 def test_tooltip_prefers_last_error_then_url() -> None:
-    record_with_error = _record(
-        url="https://example.com/video1", last_error="some error"
-    )
-    record_with_url = _record(
-        url="https://example.com/video2", last_error=None
-    )
+    record_with_error = _record(url="https://example.com/video1", last_error="some error")
+    record_with_url = _record(url="https://example.com/video2", last_error=None)
     dialog = PendingDownloadsDialog([record_with_error, record_with_url])
 
     for col in range(dialog._table.columnCount()):

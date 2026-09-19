@@ -124,9 +124,7 @@ def test_mark_batch_appends_each_new_id_once(tmp_path: Path) -> None:
 def test_mark_batch_skips_ineligible_records(tmp_path: Path) -> None:
     archive_file = tmp_path / "archive.txt"
     win = _make_window()
-    playlist_record = _record(
-        key="playlist-k", urls=["https://www.youtube.com/playlist?list=PLx"]
-    )
+    playlist_record = _record(key="playlist-k", urls=["https://www.youtube.com/playlist?list=PLx"])
     watch_record = _record(key="watch-k", urls=["https://www.youtube.com/watch?v=abc123"])
 
     with patch("meadowlark.ARCHIVE_PATH", archive_file):

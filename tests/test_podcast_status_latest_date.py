@@ -172,6 +172,4 @@ def test_classify_ts_none_ready_does_not_overwrite_callers_unknown_date(vd):
     )
     assert status_entry["status"] == "Ready"
     assert status_entry["latest_date"] == "(unknown)"
-    assert to_download == [
-        {"url": "https://example.com/watch?v=vid1", "playlist": "My Podcast"}
-    ]
+    assert to_download == [{"url": "https://example.com/watch?v=vid1", "playlist": "My Podcast"}]

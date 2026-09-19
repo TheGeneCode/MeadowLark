@@ -207,9 +207,7 @@ def test_archive_only_mode_writes_a_video_shared_by_two_urls_once(
 ) -> None:
     """A video in two dropped playlists is archived and counted once, not per URL."""
     entries_by_url = {"u1": [{"id": "shared"}, {"id": "only1"}], "u2": [{"id": "shared"}]}
-    monkeypatch.setattr(
-        meadowlark, "extract_video_entries", lambda url, **_kw: entries_by_url[url]
-    )
+    monkeypatch.setattr(meadowlark, "extract_video_entries", lambda url, **_kw: entries_by_url[url])
     monkeypatch.setattr(meadowlark, "ARCHIVE_PATH", tmp_path / "archive.txt")
     debug_lines: list[str] = []
     monkeypatch.setattr(

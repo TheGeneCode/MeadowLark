@@ -109,11 +109,7 @@ def load_playlist_urls(path: Path) -> list[str]:
         return []
     try:
         with path.open("r", encoding="utf-8") as f:
-            return [
-                line.strip()
-                for line in f
-                if line.strip() and not line.strip().startswith("#")
-            ]
+            return [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
     except (OSError, UnicodeDecodeError) as exc:
         log_exception(exc, f"Failed to read playlist file: {path}")
         return []
@@ -156,7 +152,9 @@ def load_playlist_comments_for_source(source: str) -> dict[str, str]:
                     if last_comment:
                         pl_id = extract_playlist_id(line)
                         if not pl_id and not line.startswith("http"):
-                            pl_id = line  # bare playlist ID (e.g. PLRWvNQVqAeWIafhw3XHnmz_EHOp32qoZW)
+                            pl_id = (
+                                line  # bare playlist ID (e.g. PLRWvNQVqAeWIafhw3XHnmz_EHOp32qoZW)
+                            )
                         if pl_id:
                             comments[pl_id] = last_comment
                     last_comment = None

@@ -80,9 +80,7 @@ class TestBuildBaseYdlOpts:
         ):
             opts = build_base_ydl_opts(MagicMock(), MagicMock())
 
-        assert opts["extractor_args"]["youtubepot-bgutilscript"]["server_home"] == [
-            str(fake)
-        ]
+        assert opts["extractor_args"]["youtubepot-bgutilscript"]["server_home"] == [str(fake)]
 
     def test_player_client_still_present(self) -> None:
         from src.ydl_options import build_base_ydl_opts
@@ -144,9 +142,7 @@ class TestBuildBaseYdlOpts:
             opts = build_base_ydl_opts(MagicMock(), MagicMock())
 
         assert opts["mark_watched"] is True
-        assert opts["extractor_args"]["youtubepot-bgutilscript"]["server_home"] == [
-            str(fake)
-        ]
+        assert opts["extractor_args"]["youtubepot-bgutilscript"]["server_home"] == [str(fake)]
         assert opts["extractor_args"]["youtube"]["player_client"] == [
             "web_safari",
             "tv",
@@ -200,9 +196,7 @@ class TestConfigEnvVarPrecedence:
 
     def test_env_var_override_used_when_set(self, tmp_path: Path) -> None:
         custom = tmp_path / "custom-pot-server"
-        with mock.patch.dict(
-            "os.environ", {"VID_DL_POT_SERVER_HOME": str(custom)}, clear=False
-        ):
+        with mock.patch.dict("os.environ", {"VID_DL_POT_SERVER_HOME": str(custom)}, clear=False):
             try:
                 importlib.reload(_config_mod)
                 assert custom == _config_mod.POT_PROVIDER_SERVER_HOME
@@ -210,9 +204,7 @@ class TestConfigEnvVarPrecedence:
                 importlib.reload(_config_mod)
 
     def test_env_var_empty_string_falls_back_to_default(self) -> None:
-        with mock.patch.dict(
-            "os.environ", {"VID_DL_POT_SERVER_HOME": ""}, clear=False
-        ):
+        with mock.patch.dict("os.environ", {"VID_DL_POT_SERVER_HOME": ""}, clear=False):
             try:
                 importlib.reload(_config_mod)
                 assert _config_mod.POT_PROVIDER_SERVER_HOME.parts[-3:] == (
@@ -225,18 +217,14 @@ class TestConfigEnvVarPrecedence:
 
     def test_env_var_whitespace_only_is_not_normalized_to_default(self) -> None:
         """_resolve_path only checks truthiness, so whitespace passes through verbatim."""
-        with mock.patch.dict(
-            "os.environ", {"VID_DL_POT_SERVER_HOME": "   "}, clear=False
-        ):
+        with mock.patch.dict("os.environ", {"VID_DL_POT_SERVER_HOME": "   "}, clear=False):
             try:
                 importlib.reload(_config_mod)
                 assert Path("   ") == _config_mod.POT_PROVIDER_SERVER_HOME
             finally:
                 importlib.reload(_config_mod)
 
-    def test_frozen_build_points_at_meipass_bgutil_server(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frozen_build_points_at_meipass_bgutil_server(self, tmp_path: Path) -> None:
         import os
 
         with mock.patch.dict("os.environ", {}, clear=False):
@@ -249,10 +237,7 @@ class TestConfigEnvVarPrecedence:
             sys._MEIPASS = str(tmp_path)  # type: ignore[attr-defined]
             try:
                 importlib.reload(_config_mod)
-                assert (
-                    Path(str(tmp_path)) / "bgutil-server"
-                    == _config_mod.POT_PROVIDER_SERVER_HOME
-                )
+                assert Path(str(tmp_path)) / "bgutil-server" == _config_mod.POT_PROVIDER_SERVER_HOME
             finally:
                 if had_frozen:
                     sys.frozen = saved_frozen  # type: ignore[attr-defined]
@@ -342,9 +327,7 @@ class TestParseArgs:
 class TestSetupMainBranchMatrix:
     """rc==2 error paths, --force override, non-zero passthrough, stray-file node_modules."""
 
-    def test_server_dir_missing_returns_2_and_skips_deno_lookup(
-        self, tmp_path: Path
-    ) -> None:
+    def test_server_dir_missing_returns_2_and_skips_deno_lookup(self, tmp_path: Path) -> None:
         mod = _load_setup()
         missing_server = tmp_path / "does-not-exist"
 
@@ -402,9 +385,7 @@ class TestSetupMainBranchMatrix:
         # non-fatal miss, rather than blowing up on a None Deno path.
         warm.assert_called_once_with(server_home=server, scripts_dir=None)
 
-    def test_force_reinstalls_when_node_modules_already_present(
-        self, tmp_path: Path
-    ) -> None:
+    def test_force_reinstalls_when_node_modules_already_present(self, tmp_path: Path) -> None:
         mod = _load_setup()
         server = tmp_path / "server"
         (server / "node_modules").mkdir(parents=True)
@@ -412,9 +393,7 @@ class TestSetupMainBranchMatrix:
         with (
             patch.object(mod, "resolve_server_dir", return_value=server),
             patch.object(mod, "resolve_deno", return_value="/fake/deno"),
-            patch.object(
-                mod.subprocess, "run", return_value=MagicMock(returncode=0)
-            ) as run,
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as run,
         ):
             rc = mod.main(["--force"])
 
@@ -422,9 +401,7 @@ class TestSetupMainBranchMatrix:
         run.assert_called_once()
         assert run.call_args.kwargs["cwd"] == server
 
-    def test_nonzero_deno_returncode_propagated_verbatim(
-        self, tmp_path: Path
-    ) -> None:
+    def test_nonzero_deno_returncode_propagated_verbatim(self, tmp_path: Path) -> None:
         mod = _load_setup()
         server = tmp_path / "server"
         server.mkdir()
@@ -432,17 +409,13 @@ class TestSetupMainBranchMatrix:
         with (
             patch.object(mod, "resolve_server_dir", return_value=server),
             patch.object(mod, "resolve_deno", return_value="/fake/deno"),
-            patch.object(
-                mod.subprocess, "run", return_value=MagicMock(returncode=17)
-            ),
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=17)),
         ):
             rc = mod.main([])
 
         assert rc == 17
 
-    def test_node_modules_as_stray_file_is_treated_as_absent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_node_modules_as_stray_file_is_treated_as_absent(self, tmp_path: Path) -> None:
         """A stray node_modules file (not dir) fails is_dir(), so main() reinstalls."""
         mod = _load_setup()
         server = tmp_path / "server"
@@ -452,9 +425,7 @@ class TestSetupMainBranchMatrix:
         with (
             patch.object(mod, "resolve_server_dir", return_value=server),
             patch.object(mod, "resolve_deno", return_value="/fake/deno"),
-            patch.object(
-                mod.subprocess, "run", return_value=MagicMock(returncode=0)
-            ) as run,
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as run,
         ):
             rc = mod.main([])
 
@@ -501,9 +472,7 @@ class TestSetupScript:
         with (
             patch.object(mod, "resolve_server_dir", return_value=server),
             patch.object(mod, "resolve_deno", return_value="/fake/deno"),
-            patch.object(
-                mod.subprocess, "run", return_value=MagicMock(returncode=0)
-            ) as run,
+            patch.object(mod.subprocess, "run", return_value=MagicMock(returncode=0)) as run,
         ):
             rc = mod.main([])
 
@@ -573,9 +542,7 @@ class TestSpecBundlesProviderAndServer:
 # .github/workflows/release.yml -- PO-token setup step ordering
 # ---------------------------------------------------------------------------
 
-_WORKFLOW_PATH = (
-    Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
-)
+_WORKFLOW_PATH = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
 
 
 class TestReleaseWorkflowStepOrder:

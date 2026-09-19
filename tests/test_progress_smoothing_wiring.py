@@ -133,9 +133,7 @@ def test_handle_info_changed_finished_status_delegates_and_returns_early() -> No
     vd = import_vid_module()
     win = _make_win(vd)
 
-    win.handle_info_changed(
-        {"status": "finished", "total_bytes": 12_345, "filename": "a.mp4"}
-    )
+    win.handle_info_changed({"status": "finished", "total_bytes": 12_345, "filename": "a.mp4"})
 
     assert win.labelOutput.text is None
     assert win.barProgress.maximum is None

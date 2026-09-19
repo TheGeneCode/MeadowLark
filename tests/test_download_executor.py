@@ -459,9 +459,7 @@ class TestExtractBaseOutputDir:
     def test_outtmpl_dict_default_not_string_falls_back_to_other_value(self) -> None:
         """Dict outtmpl where 'default' is not a string falls back to first string value found."""
         executor = DownloadExecutor()
-        options = {
-            "outtmpl": {"default": 42, "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}
-        }
+        options = {"outtmpl": {"default": 42, "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}}
         result = executor._extract_base_output_dir(options)
         assert result == "E:/vid/chapters"
 
@@ -481,18 +479,14 @@ class TestExtractBaseOutputDir:
     def test_outtmpl_dict_default_empty_string_falls_back_to_other_value(self) -> None:
         """Dict outtmpl where 'default' is an empty string falls back to first non-empty string value."""
         executor = DownloadExecutor()
-        options = {
-            "outtmpl": {"default": "", "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}
-        }
+        options = {"outtmpl": {"default": "", "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}}
         result = executor._extract_base_output_dir(options)
         assert result == "E:/vid/chapters"
 
     def test_outtmpl_non_string_non_dict_type_returns_none(self) -> None:
         """Outtmpl of an unexpected type (e.g. list) returns None without raising."""
         executor = DownloadExecutor()
-        result = executor._extract_base_output_dir(
-            {"outtmpl": ["E:/vid/%(title)s.%(ext)s"]}
-        )
+        result = executor._extract_base_output_dir({"outtmpl": ["E:/vid/%(title)s.%(ext)s"]})
         assert result is None
 
     def test_outtmpl_string_trailing_slash_single_useful_segment(self) -> None:
@@ -522,9 +516,7 @@ class TestRenameNaFolderIfNeeded:
                 "playlist_id": "PL123",
             },
         }
-        executor._rename_na_folder_if_needed(
-            options, ["https://youtube.com/playlist?list=PL123"]
-        )
+        executor._rename_na_folder_if_needed(options, ["https://youtube.com/playlist?list=PL123"])
         mock_rename.assert_called_once_with(
             "E:/vid",
             ["https://youtube.com/playlist?list=PL123"],
@@ -549,9 +541,7 @@ class TestRenameNaFolderIfNeeded:
         mock_rename.assert_not_called()
 
     @patch("src.download_executor.rename_playlist_folders_from_comments")
-    def test_playlist_comments_empty_dict_does_not_invoke_rename(
-        self, mock_rename: Mock
-    ) -> None:
+    def test_playlist_comments_empty_dict_does_not_invoke_rename(self, mock_rename: Mock) -> None:
         """Empty playlist_comments dict is falsy — rename is not called."""
         executor = DownloadExecutor()
         options = {
@@ -562,9 +552,7 @@ class TestRenameNaFolderIfNeeded:
         mock_rename.assert_not_called()
 
     @patch("src.download_executor.rename_playlist_folders_from_comments")
-    def test_playlist_comments_none_does_not_invoke_rename(
-        self, mock_rename: Mock
-    ) -> None:
+    def test_playlist_comments_none_does_not_invoke_rename(self, mock_rename: Mock) -> None:
         """Explicit None playlist_comments — rename is not called."""
         executor = DownloadExecutor()
         options = {
@@ -575,9 +563,7 @@ class TestRenameNaFolderIfNeeded:
         mock_rename.assert_not_called()
 
     @patch("src.download_executor.rename_playlist_folders_from_comments")
-    def test_no_extractable_base_dir_does_not_invoke_rename(
-        self, mock_rename: Mock
-    ) -> None:
+    def test_no_extractable_base_dir_does_not_invoke_rename(self, mock_rename: Mock) -> None:
         """When base dir cannot be extracted (single-segment path), rename is not called."""
         executor = DownloadExecutor()
         options = {
@@ -619,9 +605,7 @@ class TestRenameNaFolderIfNeeded:
         assert kwargs["direct_playlist_id"] is None
 
     @patch("src.download_executor.rename_playlist_folders_from_comments")
-    def test_dict_outtmpl_extracts_dir_and_invokes_rename(
-        self, mock_rename: Mock
-    ) -> None:
+    def test_dict_outtmpl_extracts_dir_and_invokes_rename(self, mock_rename: Mock) -> None:
         """Dict-form outtmpl is handled correctly — dir extracted and rename called."""
         executor = DownloadExecutor()
         options = {
@@ -640,9 +624,7 @@ class TestExtractBaseOutputDirEdgeCaseBug:
     def test_dict_default_empty_string_falls_back_to_non_empty_value(self) -> None:
         """When 'default' is '' the loop skips it and uses the first non-empty string value."""
         executor = DownloadExecutor()
-        options = {
-            "outtmpl": {"default": "", "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}
-        }
+        options = {"outtmpl": {"default": "", "chapter": "E:/vid/chapters/%(title)s.%(ext)s"}}
         result = executor._extract_base_output_dir(options)
         assert result == "E:/vid/chapters"
 
@@ -744,9 +726,7 @@ class TestExtractTitleCookiefileBoundaries:
     """Boundary tests for cookiefile handling in _extract_title."""
 
     @patch("src.download_executor.extract_playlist_info")
-    def test_options_none_default_passes_no_extra_opts(
-        self, mock_extract: Mock
-    ) -> None:
+    def test_options_none_default_passes_no_extra_opts(self, mock_extract: Mock) -> None:
         """options=None (default) must not set extra_opts — backward compat."""
         mock_extract.return_value = {"title": "Some Video"}
         executor = DownloadExecutor()
@@ -756,9 +736,7 @@ class TestExtractTitleCookiefileBoundaries:
         assert kwargs.get("extra_opts") is None
 
     @patch("src.download_executor.extract_playlist_info")
-    def test_options_with_cookiefile_none_passes_no_extra_opts(
-        self, mock_extract: Mock
-    ) -> None:
+    def test_options_with_cookiefile_none_passes_no_extra_opts(self, mock_extract: Mock) -> None:
         """cookiefile=None in options — walrus produces None which is falsy, so no extra_opts."""
         mock_extract.return_value = {"title": "Video"}
         executor = DownloadExecutor()
@@ -778,9 +756,7 @@ class TestExtractTitleCookiefileBoundaries:
         assert kwargs.get("extra_opts") is None
 
     @patch("src.download_executor.extract_playlist_info")
-    def test_options_empty_dict_passes_no_extra_opts(
-        self, mock_extract: Mock
-    ) -> None:
+    def test_options_empty_dict_passes_no_extra_opts(self, mock_extract: Mock) -> None:
         """options={} (no cookiefile key at all) — extra_opts must remain None."""
         mock_extract.return_value = {"title": "Video"}
         executor = DownloadExecutor()
@@ -789,9 +765,7 @@ class TestExtractTitleCookiefileBoundaries:
         assert kwargs.get("extra_opts") is None
 
     @patch("src.download_executor.extract_playlist_info")
-    def test_options_cookiefile_whitespace_string_forwarded(
-        self, mock_extract: Mock
-    ) -> None:
+    def test_options_cookiefile_whitespace_string_forwarded(self, mock_extract: Mock) -> None:
         """
         Cookiefile containing only whitespace is truthy — it IS forwarded.
 

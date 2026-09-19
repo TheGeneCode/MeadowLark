@@ -77,9 +77,7 @@ class TestConfigPlayerClients:
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("VID_DL_YT_PLAYER_CLIENT", None)
             importlib.reload(_config_mod)
-            clients = [
-                c.strip() for c in _config_mod.YOUTUBE_PLAYER_CLIENTS.split(",")
-            ]
+            clients = [c.strip() for c in _config_mod.YOUTUBE_PLAYER_CLIENTS.split(",")]
             assert "mweb" not in clients
             assert clients[0] == "web_embedded"
         importlib.reload(_config_mod)

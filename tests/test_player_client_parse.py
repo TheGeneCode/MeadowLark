@@ -40,6 +40,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_logger() -> MagicMock:
     return MagicMock()
 
@@ -68,22 +69,25 @@ def _build_opts(player_clients: str, mark_watched_setting: Any = False) -> dict[
 # A-series: player_client list parsing (Dimension 1)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("web_safari,tv", ["web_safari", "tv"]),               # A1 two clients
-        ("", []),                                               # A2 empty string
-        ("   ", []),                                            # A3 whitespace-only
-        ("web_safari", ["web_safari"]),                        # A4 single client
-        (",web_safari,", ["web_safari"]),                      # A5 leading/trailing commas
-        ("web_safari,,tv", ["web_safari", "tv"]),              # A6 internal double comma
-        (" web_safari , tv ", ["web_safari", "tv"]),           # A7 spaces around entries
-        (",", []),                                              # A8 comma-only
-        (",,", []),                                            # A9 multiple commas only
-        ("web_safari,tv,mweb,android",                         # A10 many clients
-         ["web_safari", "tv", "mweb", "android"]),
-        ("  ,  ,web_safari,  ", ["web_safari"]),               # A11 whitespace + commas
-        ("WEB_SAFARI", ["WEB_SAFARI"]),                        # A12 uppercase preserved
+        ("web_safari,tv", ["web_safari", "tv"]),  # A1 two clients
+        ("", []),  # A2 empty string
+        ("   ", []),  # A3 whitespace-only
+        ("web_safari", ["web_safari"]),  # A4 single client
+        (",web_safari,", ["web_safari"]),  # A5 leading/trailing commas
+        ("web_safari,,tv", ["web_safari", "tv"]),  # A6 internal double comma
+        (" web_safari , tv ", ["web_safari", "tv"]),  # A7 spaces around entries
+        (",", []),  # A8 comma-only
+        (",,", []),  # A9 multiple commas only
+        (
+            "web_safari,tv,mweb,android",  # A10 many clients
+            ["web_safari", "tv", "mweb", "android"],
+        ),
+        ("  ,  ,web_safari,  ", ["web_safari"]),  # A11 whitespace + commas
+        ("WEB_SAFARI", ["WEB_SAFARI"]),  # A12 uppercase preserved
     ],
 )
 def test_player_client_parse_produces_correct_list(raw: str, expected: list[str]) -> None:
@@ -126,6 +130,7 @@ def test_player_client_empty_string_input_produces_empty_list_not_list_with_empt
 # ---------------------------------------------------------------------------
 # B-series: extractor_args coexistence with other base opts (Dimension 2)
 # ---------------------------------------------------------------------------
+
 
 def test_extractor_args_present_when_mark_watched_false() -> None:
     """extractor_args must be in opts even when mark_watched is disabled (B1)."""

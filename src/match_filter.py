@@ -25,11 +25,7 @@ def build_match_filter(
             if availability == "scheduled":
                 return "Skipping: scheduled"
             if is_live or live_status in ("is_live", "is_upcoming"):
-                url = (
-                    info.get("webpage_url")
-                    or info.get("original_url")
-                    or info.get("url")
-                )
+                url = info.get("webpage_url") or info.get("original_url") or info.get("url")
                 if url:
                     playlist_id = info.get("playlist_id")
                     add_to_queue_fn(url, source, playlist_id)

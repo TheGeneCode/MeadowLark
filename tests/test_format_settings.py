@@ -347,18 +347,14 @@ class TestMakeComboRowSelection:
         """Every declared video format can be found by findData."""
         for value, _ in VIDEO_FORMAT_OPTIONS:
             with _patch_formats(value, "m4a"):
-                _, combo = _make_combo_row(
-                    "VID_DL_VIDEO_FORMAT", VIDEO_FORMAT_OPTIONS, None
-                )
+                _, combo = _make_combo_row("VID_DL_VIDEO_FORMAT", VIDEO_FORMAT_OPTIONS, None)
             assert combo.currentData() == value
 
     def test_all_audio_option_values_selectable(self) -> None:
         """Every declared audio format can be found by findData."""
         for value, _ in AUDIO_FORMAT_OPTIONS:
             with _patch_formats("mp4", value):
-                _, combo = _make_combo_row(
-                    "VID_DL_AUDIO_FORMAT", AUDIO_FORMAT_OPTIONS, None
-                )
+                _, combo = _make_combo_row("VID_DL_AUDIO_FORMAT", AUDIO_FORMAT_OPTIONS, None)
             assert combo.currentData() == value
 
 
@@ -503,32 +499,24 @@ class TestConfigConstants:
     def test_default_audio_format_is_non_empty_string(self) -> None:
         assert isinstance(cfg_mod.DEFAULT_AUDIO_FORMAT, str) and cfg_mod.DEFAULT_AUDIO_FORMAT
 
-    def test_default_video_format_without_env_is_mp4(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_video_format_without_env_is_mp4(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When VID_DL_VIDEO_FORMAT env var is absent, default should be 'mp4'."""
         monkeypatch.delenv("VID_DL_VIDEO_FORMAT", raising=False)
         importlib.reload(cfg_mod)
         assert cfg_mod.DEFAULT_VIDEO_FORMAT == "mp4"
 
-    def test_default_audio_format_without_env_is_m4a(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_audio_format_without_env_is_m4a(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When VID_DL_AUDIO_FORMAT env var is absent, default should be 'm4a'."""
         monkeypatch.delenv("VID_DL_AUDIO_FORMAT", raising=False)
         importlib.reload(cfg_mod)
         assert cfg_mod.DEFAULT_AUDIO_FORMAT == "m4a"
 
-    def test_default_video_format_respects_env_var(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_video_format_respects_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("VID_DL_VIDEO_FORMAT", "mkv")
         importlib.reload(cfg_mod)
         assert cfg_mod.DEFAULT_VIDEO_FORMAT == "mkv"
 
-    def test_default_audio_format_respects_env_var(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_audio_format_respects_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("VID_DL_AUDIO_FORMAT", "flac")
         importlib.reload(cfg_mod)
         assert cfg_mod.DEFAULT_AUDIO_FORMAT == "flac"
@@ -643,9 +631,7 @@ class TestRemuxvideoKeyPresence:
 
     @pytest.mark.parametrize("source", ["720playlists", "1080playlists", "480", "garbage"])
     @pytest.mark.parametrize("vfmt", [None, ""])
-    def test_remuxvideo_falls_back_to_mp4_when_vfmt_falsy(
-        self, source: str, vfmt: Any
-    ) -> None:
+    def test_remuxvideo_falls_back_to_mp4_when_vfmt_falsy(self, source: str, vfmt: Any) -> None:
         """When vfmt is falsy, FFmpegVideoRemuxer preferedformat must be 'mp4'."""
         with _patch_formats(vfmt, "m4a"):
             opts = get_source_options(source)
@@ -717,9 +703,7 @@ class TestPostprocessorOrdering:
     """
 
     @pytest.mark.parametrize("source", ["480", "720", "1080", "garbage"])
-    def test_remuxer_is_last_postprocessor_for_numeric_and_unknown(
-        self, source: str
-    ) -> None:
+    def test_remuxer_is_last_postprocessor_for_numeric_and_unknown(self, source: str) -> None:
         """FFmpegVideoRemuxer must be the final entry in postprocessors."""
         with _patch_formats("mp4", "m4a"):
             opts = get_source_options(source)
@@ -731,9 +715,7 @@ class TestPostprocessorOrdering:
         )
 
     @pytest.mark.parametrize("source", ["480", "720", "1080", "garbage"])
-    def test_sponsorblock_precedes_remuxer_for_numeric_and_unknown(
-        self, source: str
-    ) -> None:
+    def test_sponsorblock_precedes_remuxer_for_numeric_and_unknown(self, source: str) -> None:
         """SponsorBlock must appear before FFmpegVideoRemuxer in the list."""
         with _patch_formats("mp4", "m4a"):
             opts = get_source_options(source)
@@ -741,9 +723,7 @@ class TestPostprocessorOrdering:
         keys = [pp.get("key") for pp in pps]
         assert "SponsorBlock" in keys, f"SponsorBlock missing for source={source!r}"
         sb_idx = keys.index("SponsorBlock")
-        remuxer_idx = next(
-            (i for i, k in enumerate(keys) if k == "FFmpegVideoRemuxer"), None
-        )
+        remuxer_idx = next((i for i, k in enumerate(keys) if k == "FFmpegVideoRemuxer"), None)
         assert remuxer_idx is not None
         assert sb_idx < remuxer_idx, (
             f"SponsorBlock index {sb_idx} >= remuxer index {remuxer_idx} for source={source!r}"
@@ -761,9 +741,7 @@ class TestPostprocessorOrdering:
         )
 
     @pytest.mark.parametrize("source", ["720playlists", "1080playlists"])
-    def test_named_playlist_sources_have_exactly_one_postprocessor(
-        self, source: str
-    ) -> None:
+    def test_named_playlist_sources_have_exactly_one_postprocessor(self, source: str) -> None:
         """Named playlist sources must have exactly one postprocessor: the remuxer."""
         with _patch_formats("mp4", "m4a"):
             opts = get_source_options(source)

@@ -109,8 +109,7 @@ def _declared_dependencies() -> frozenset[str]:
     with (_REPO_ROOT / "pyproject.toml").open("rb") as handle:
         pyproject = tomllib.load(handle)
     return frozenset(
-        _dependency_name(requirement)
-        for requirement in pyproject["project"]["dependencies"]
+        _dependency_name(requirement) for requirement in pyproject["project"]["dependencies"]
     )
 
 
@@ -399,12 +398,7 @@ def test_top_level_imports_descends_into_function_body(tmp_path: Path) -> None:
 
 
 def test_top_level_imports_descends_into_try_except(tmp_path: Path) -> None:
-    content = (
-        "try:\n"
-        "    import tomllib\n"
-        "except ImportError:\n"
-        "    import tomli as tomllib\n"
-    )
+    content = "try:\n    import tomllib\nexcept ImportError:\n    import tomli as tomllib\n"
     path = _write_source(tmp_path, "try_except.py", content)
     assert _top_level_imports([path]) == frozenset({"tomllib", "tomli"})
 
