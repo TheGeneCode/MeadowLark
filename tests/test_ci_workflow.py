@@ -321,3 +321,23 @@ def test_meadowlark_pyw_docstring_floor_matches_pyproject() -> None:
     match = re.search(r"^- Python (\d+\.\d+)\+$", docstring, re.MULTILINE)
     assert match is not None, "meadowlark.pyw docstring no longer has a '- Python X.Y+' line"
     assert match.group(1) == _requires_python_floor()
+
+
+def test_workflows_carry_no_private_genekit_auth_step() -> None:
+    """
+    Guard: no workflow carries the dead private-genekit auth step (the repo is public).
+
+    A `GENEKIT_TOKEN` PAT or a global github.com `insteadOf` rewrite has no purpose.
+
+    The rewrite is also a trap: it applies to *every* github.com URL, so once the
+    now-unused secret is deleted it would inject an empty token into every clone.
+    """
+    workflows = sorted((_REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows, "no workflow files found"
+    offenders = [
+        f"{path.name}: {needle}"
+        for path in workflows
+        for needle in ("GENEKIT_TOKEN", "insteadOf")
+        if needle in path.read_text(encoding="utf-8")
+    ]
+    assert not offenders, f"dead private-genekit auth crept back into CI: {offenders}"

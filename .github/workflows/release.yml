@@ -13,14 +13,6 @@ jobs:
 
       - uses: astral-sh/setup-uv@v3
 
-      # genekit is a private repo; uv shells out to git, which has no credentials
-      # of its own on the runner. Rewrite github.com HTTPS URLs to carry the PAT.
-      # Must run before any uv command that resolves deps (incl. `uv version`).
-      - name: Authenticate git for private genekit dependency
-        env:
-          GENEKIT_TOKEN: ${{ secrets.GENEKIT_TOKEN }}
-        run: git config --global url."https://x-access-token:$env:GENEKIT_TOKEN@github.com/".insteadOf "https://github.com/"
-
       - name: Stamp version from tag
         shell: pwsh
         run: |
