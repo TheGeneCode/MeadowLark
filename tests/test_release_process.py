@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -78,11 +79,16 @@ _NOT_DIRECTLY_IMPORTED: dict[str, str] = {
         "yt-dlp's JS-challenge solver; discovered and loaded by yt-dlp at "
         "runtime, not by this codebase."
     ),
-    # bgutil-ytdlp-pot-provider is deliberately absent: it provides the
-    # top-level `yt_dlp_plugins` namespace, and tests/test_pot_provider.py
-    # imports getpot_bgutil_script from it directly, so the audit resolves it
-    # normally. Do not re-add it here.
+    "bgutil-ytdlp-pot-provider": (
+        "yt-dlp PO-token plugin in the `yt_dlp_plugins` namespace; yt-dlp "
+        "discovers and loads it at runtime, meadowlark.spec lists its modules as "
+        "hiddenimports, and src/pot_provider.py only probes it via find_spec()."
+    ),
 }
+
+# Top-level directories whose sources never reach the frozen build, so their
+# imports cannot justify a runtime dependency.
+_NON_SHIPPED_DIRS = frozenset({"tests", "scripts"})
 
 
 def _normalize(name: str) -> str:
@@ -108,7 +114,8 @@ def _declared_dependencies() -> frozenset[str]:
     )
 
 
-def _tracked_source_files() -> list[Path]:
+def _shipped_source_files() -> list[Path]:
+    """Tracked Python sources outside _NON_SHIPPED_DIRS."""
     assert _GIT is not None, "git must be on PATH to run this test"
     tracked = subprocess.run(  # noqa: S603 -- fixed argv, no shell, trusted git binary
         [_GIT, "ls-files", "-z"],
@@ -121,6 +128,7 @@ def _tracked_source_files() -> list[Path]:
         _REPO_ROOT / relative
         for relative in tracked.split("\0")
         if relative.endswith(_SOURCE_SUFFIXES)
+        and relative.split("/", 1)[0] not in _NON_SHIPPED_DIRS
     ]
 
 
@@ -145,11 +153,11 @@ def declared_deps() -> frozenset[str]:
 
 @pytest.fixture(scope="module")
 def imported_dists() -> frozenset[str]:
-    """Distributions that actually back the imports in tracked source files."""
+    """Distributions that actually back the imports in shipped source files."""
     provided = importlib.metadata.packages_distributions()
     return frozenset(
         _normalize(distribution)
-        for name in _top_level_imports(_tracked_source_files())
+        for name in _top_level_imports(_shipped_source_files())
         for distribution in provided.get(name, ())
     )
 
@@ -224,6 +232,17 @@ def test_not_directly_imported_allowlist_has_no_stale_entries(
     assert not now_imported, (
         f"{sorted(now_imported)} are now imported directly -- remove them from "
         "_NOT_DIRECTLY_IMPORTED so the audit tracks them normally."
+    )
+
+
+def test_test_tooling_cannot_justify_a_runtime_dependency(imported_dists) -> None:
+    # pytest-cov sat in [project] dependencies (and so in the frozen build's
+    # dependency closure) because the audit counted tests/ imports as runtime
+    # use. Only code that ships may vouch for a runtime dependency.
+    assert "pytest" not in imported_dists, (
+        "The runtime-dependency audit resolved `pytest` as imported, so it is "
+        "scanning test code -- a test-only package could then sit in [project] "
+        "dependencies unflagged."
     )
 
 
@@ -407,6 +426,55 @@ def test_top_level_imports_unions_across_multiple_files(tmp_path: Path) -> None:
     first = _write_source(tmp_path, "first.py", "import os\n")
     second = _write_source(tmp_path, "second.py", "import sys\n")
     assert _top_level_imports([first, second]) == frozenset({"os", "sys"})
+
+
+def _fake_git_ls_files(
+    *relative_paths: str,
+) -> Callable[..., subprocess.CompletedProcess[str]]:
+    """Build a subprocess.run stub mimicking `git ls-files -z` output."""
+    stdout = "".join(f"{path}\0" for path in relative_paths)
+
+    def _run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
+
+    return _run
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "should_be_shipped"),
+    [
+        ("src/qux.py", True),
+        ("meadowlark.pyw", True),
+        ("tests/foo.py", False),
+        ("tests/sub/bar.py", False),
+        ("scripts/baz.py", False),
+        ("testsuite/module.py", True),
+        ("scripts_extra/module.py", True),
+        ("tests.py", True),
+    ],
+    ids=[
+        "root-level-src-file",
+        "root-level-pyw-file",
+        "nested-under-tests-dir",
+        "deeply-nested-under-tests-dir",
+        "nested-under-scripts-dir",
+        "sibling-dir-not-excluded-by-prefix",
+        "sibling-dir-not-excluded-by-prefix-scripts",
+        "root-file-named-like-excluded-dir",
+    ],
+)
+def test_shipped_source_files_filters_by_exact_top_level_segment(
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: str,
+    should_be_shipped: bool,
+) -> None:
+    # _shipped_source_files must exclude only an exact "tests"/"scripts" first
+    # path segment, not any directory that merely starts with those names
+    # (e.g. testsuite/), and must not treat a root-level file that shares a
+    # name with an excluded directory (tests.py) as excluded.
+    monkeypatch.setattr(subprocess, "run", _fake_git_ls_files(relative_path))
+    shipped = {path.relative_to(_REPO_ROOT).as_posix() for path in _shipped_source_files()}
+    assert (relative_path in shipped) is should_be_shipped
 
 
 def test_dependency_audit_flags_undeclared_unimported_dependency() -> None:
