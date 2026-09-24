@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import utils
+from src.logging_utils import log_exception
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -32,7 +32,7 @@ def build_match_filter(
                     log_fn(f"Queued live for later: {url} [{source}]")
                 return "Skipping live; queued for later"
         except Exception as exc:
-            utils.log_exception(exc, "Error in match_filter")
+            log_exception(exc, "Error in match_filter")
             return None
         return None
 

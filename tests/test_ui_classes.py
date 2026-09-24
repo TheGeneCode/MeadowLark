@@ -1,4 +1,4 @@
-"""Unit tests for UIClasses module."""
+"""Unit tests for src.ui_classes module."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PyQt6.QtWidgets import QApplication
 
-from UIClasses import DropLabel, PlaylistButton, PlaylistDialog
+from src.ui_classes import DropLabel, PlaylistButton, PlaylistDialog
 
 # Ensure QApplication exists for Qt testing
 _app = QApplication.instance() or QApplication([])
@@ -203,13 +203,13 @@ class TestPlaylistButton:
             button.mousePressEvent(event)
             # Should call parent implementation for non-right-click
 
-    @patch("UIClasses.startfile")
+    @patch("src.ui_classes.startfile")
     def test_playlist_button_mouse_press_right_click_exists(
         self,
         mock_startfile: MagicMock,
     ) -> None:
         """Test right-click opens playlist file if it exists."""
-        with patch("UIClasses.Path") as mock_path_class:
+        with patch("src.ui_classes.Path") as mock_path_class:
             mock_path = MagicMock()
             mock_path.exists.return_value = True
             mock_path_class.return_value = mock_path
@@ -224,15 +224,15 @@ class TestPlaylistButton:
 
             mock_startfile.assert_called_once_with(mock_path)
 
-    @patch("UIClasses.startfile")
-    @patch("UIClasses.write_template_playlist_file")
+    @patch("src.ui_classes.startfile")
+    @patch("src.ui_classes.write_template_playlist_file")
     def test_playlist_button_mouse_press_right_click_not_exists(
         self,
         mock_write_template: MagicMock,
         mock_startfile: MagicMock,
     ) -> None:
         """Right-click on a missing playlist file creates a template then opens it."""
-        with patch("UIClasses.Path") as mock_path_class:
+        with patch("src.ui_classes.Path") as mock_path_class:
             mock_path = MagicMock()
             mock_path.exists.return_value = False
             mock_path_class.return_value = mock_path
@@ -248,8 +248,8 @@ class TestPlaylistButton:
             mock_write_template.assert_called_once_with(mock_path)
             mock_startfile.assert_called_once_with(mock_path)
 
-    @patch("UIClasses.startfile")
-    @patch("UIClasses.write_template_playlist_file")
+    @patch("src.ui_classes.startfile")
+    @patch("src.ui_classes.write_template_playlist_file")
     def test_playlist_button_mouse_press_right_click_template_write_fails(
         self,
         mock_write_template: MagicMock,
@@ -257,7 +257,7 @@ class TestPlaylistButton:
     ) -> None:
         """If template creation fails, the error is logged and the file is not opened."""
         mock_write_template.side_effect = OSError("disk full")
-        with patch("UIClasses.Path") as mock_path_class:
+        with patch("src.ui_classes.Path") as mock_path_class:
             mock_path = MagicMock()
             mock_path.exists.return_value = False
             mock_path_class.return_value = mock_path
@@ -268,13 +268,13 @@ class TestPlaylistButton:
             event = MagicMock(spec=QMouseEvent)
             event.button.return_value = Qt.MouseButton.RightButton
 
-            with patch("UIClasses.utils.log_exception") as mock_log:
+            with patch("src.ui_classes.log_exception") as mock_log:
                 button.mousePressEvent(event)
                 mock_log.assert_called_once()
 
             mock_startfile.assert_not_called()
 
-    @patch("UIClasses.startfile")
+    @patch("src.ui_classes.startfile")
     def test_playlist_button_mouse_press_right_click_null_byte_path_logged(
         self,
         mock_startfile: MagicMock,
@@ -294,7 +294,7 @@ class TestPlaylistButton:
         event = MagicMock(spec=QMouseEvent)
         event.button.return_value = Qt.MouseButton.RightButton
 
-        with patch("UIClasses.utils.log_exception") as mock_log:
+        with patch("src.ui_classes.log_exception") as mock_log:
             button.mousePressEvent(event)
             mock_log.assert_called_once()
 

@@ -77,9 +77,7 @@ def load_failed_downloads(path: Path) -> list[FailedRecord]:
 def save_failed_downloads(path: Path, records: list[FailedRecord]) -> None:
     """Write failed-download records atomically; never raises on write failure."""
     try:
-        atomic_write_text(
-            path, json.dumps(records, ensure_ascii=False, indent=1), mkdir=True
-        )
+        atomic_write_text(path, json.dumps(records, ensure_ascii=False, indent=1), mkdir=True)
     except OSError as exc:
         log_exception(exc, f"save_failed_downloads: could not write {path}")
 
@@ -167,6 +165,17 @@ def make_failed_record(
     }
 
 
+def progress_item_key(info: dict) -> str:
+    """Identify the item a yt-dlp progress event's ``info_dict`` belongs to."""
+    return str(
+        info.get("id")
+        or info.get("_filename")
+        or info.get("url")
+        or info.get("playlist_id")
+        or "unknown",
+    )
+
+
 class FailureHook:
     """
     Progress hook buffering per-entry download errors.
@@ -189,15 +198,7 @@ class FailureHook:
         self._buffered: dict[str, FailedRecord] = {}
 
     def _vid_id(self, info: dict) -> str:
-        # Duplicated from QYT.HistoryHook._vid_id rather than imported: importing
-        # QYT here would create a src -> root -> src import cycle.
-        return str(
-            info.get("id")
-            or info.get("_filename")
-            or info.get("url")
-            or info.get("playlist_id")
-            or "unknown",
-        )
+        return progress_item_key(info)
 
     def __call__(self, d: dict) -> None:
         """Buffer an error event, or discard a buffered failure once the item finishes."""
@@ -273,7 +274,7 @@ class ErrorCapturingLogger:
     uses the URL the user supplied, this path the canonical watch URL).
 
     Every other logger method is delegated untouched, so the wrapped object keeps
-    behaving as whatever it is - notably ``QYT.QLogger``, whose ``message_changed``
+    behaving as whatever it is - notably ``src.qyt.QLogger``, whose ``message_changed``
     signal the download thread reconnects after each run.
     """
 

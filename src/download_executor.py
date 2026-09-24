@@ -4,7 +4,8 @@ from collections.abc import Callable
 
 import yt_dlp
 
-import utils
+from src.dict_utils import remove_sponsorblock_postprocessor
+from src.logging_utils import log_exception
 
 from .config import ENABLED_RESOLUTIONS, YDL_DOWNLOAD_ERRORS, YDL_EXTRACTION_ERRORS
 from .path_utils import rename_playlist_folders_from_comments
@@ -78,7 +79,7 @@ class DownloadExecutor:
             info = extract_playlist_info(urls[0], ydl_class=YoutubeDL, extra_opts=extra_opts)
             title = info.get("title", title)
         except YDL_EXTRACTION_ERRORS as exc:
-            utils.log_exception(exc, "Failed to extract title for error logging")
+            log_exception(exc, "Failed to extract title for error logging")
         return title
 
     def _try_fallback(
@@ -103,7 +104,7 @@ class DownloadExecutor:
             self._run_download(fallback, urls)
             return True, error_str
         except YDL_EXTRACTION_ERRORS as e2:
-            utils.log_exception(e2, log_context)
+            log_exception(e2, log_context)
             return False, str(e2)
 
     @staticmethod
@@ -243,7 +244,7 @@ class DownloadExecutor:
             trigger_phrase="Unable to communicate with SponsorBlock API",
             error_str=error_str,
             message="SponsorBlock API unavailable; retrying download without SponsorBlock...",
-            options_modifier=utils.remove_sponsorblock_postprocessor,
+            options_modifier=remove_sponsorblock_postprocessor,
             log_context="SponsorBlock removal retry failed",
         )
 

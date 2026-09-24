@@ -1,4 +1,4 @@
-"""Unit tests for QYT module classes and functionality."""
+"""Unit tests for src.qyt module classes and functionality."""
 
 import subprocess
 from pathlib import Path
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PyQt6.QtCore import QObject
 
-from QYT import HistoryHook, HistoryLogger, QHook, QLogger, QYTQueue, parse_history_log
+from src.qyt import HistoryHook, HistoryLogger, QHook, QLogger, QYTQueue, parse_history_log
 
 
 class TestQLogger:
@@ -158,7 +158,7 @@ class TestHistoryLogger:
         )
         assert "Result: SKIPPED (Short duration (<3 min))" in result
 
-    @patch("QYT.HistoryLogger.HISTORY_PATH")
+    @patch("src.qyt.HistoryLogger.HISTORY_PATH")
     def test_log_success(self, mock_path: MagicMock) -> None:
         """Test HistoryLogger.log writes success entry."""
         mock_file = MagicMock()
@@ -174,7 +174,7 @@ class TestHistoryLogger:
         assert "SUCCESS" in written_content
         assert "URL" not in written_content
 
-    @patch("QYT.HistoryLogger.HISTORY_PATH")
+    @patch("src.qyt.HistoryLogger.HISTORY_PATH")
     def test_log_success_with_url(self, mock_path: MagicMock) -> None:
         """Test HistoryLogger.log writes URL field when provided."""
         mock_file = MagicMock()
@@ -196,7 +196,7 @@ class TestHistoryLogger:
         assert "SUCCESS" in written_content
         assert "| URL: https://www.youtube.com/watch?v=abc123" in written_content
 
-    @patch("QYT.HistoryLogger.HISTORY_PATH")
+    @patch("src.qyt.HistoryLogger.HISTORY_PATH")
     def test_log_skip(self, mock_path: MagicMock) -> None:
         """Test HistoryLogger.log_skip writes skip entry."""
         mock_file = MagicMock()
@@ -223,7 +223,7 @@ class TestParseHistoryLog:
 
     def test_returns_empty_when_no_file(self, tmp_path: Path) -> None:
         """Returns empty list when history file does not exist."""
-        with patch("QYT.HistoryLogger.HISTORY_PATH", tmp_path / "nonexistent.txt"):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", tmp_path / "nonexistent.txt"):
             assert parse_history_log() == []
 
     def test_parses_old_format_without_url(self, tmp_path: Path) -> None:
@@ -234,7 +234,7 @@ class TestParseHistoryLog:
             "Result: SUCCESS\n",
             encoding="utf-8",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["url"] is None
@@ -249,7 +249,7 @@ class TestParseHistoryLog:
             "SUCCESS | URL: https://www.youtube.com/watch?v=xyz\n",
             encoding="utf-8",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["url"] == "https://www.youtube.com/watch?v=xyz"
@@ -263,7 +263,7 @@ class TestParseHistoryLog:
             "[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Second | Result: FAIL\n",
             encoding="utf-8",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert entries[0]["title"] == "Second"
         assert entries[1]["title"] == "First"
@@ -276,7 +276,7 @@ class TestParseHistoryLog:
             "Result: SUCCESS | URL: https://nebula.tv/ep1\n",
             encoding="utf-8",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["title"] == "Part 1 | The Story"
@@ -290,7 +290,7 @@ class TestParseHistoryLog:
             "[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Good | Result: SUCCESS\n",
             encoding="utf-8",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["title"] == "Good"
@@ -302,7 +302,7 @@ class TestParseHistoryLog:
             b"[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: Video | Result: "
             b"SUCCESS\r\n",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["result"] == "SUCCESS"
@@ -314,7 +314,7 @@ class TestParseHistoryLog:
             b"\xef\xbb\xbf[2026-04-01 12:00:00] Site: youtube | Type: 1080 | Title: First | "
             b"Result: SUCCESS\n",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["title"] == "First"
@@ -327,7 +327,7 @@ class TestParseHistoryLog:
             "(see | URL: docs) | URL: https://youtube.com/watch?v=abc\n",
             encoding="utf-8",
         )
-        with patch("QYT.HistoryLogger.HISTORY_PATH", log_file):
+        with patch("src.qyt.HistoryLogger.HISTORY_PATH", log_file):
             entries = parse_history_log()
         assert len(entries) == 1
         assert entries[0]["url"] == "https://youtube.com/watch?v=abc"
@@ -376,7 +376,7 @@ class TestHistoryHook:
         assert hook_unknown._infer_site({"extractor": "nebula"}) == "nebula"
         assert hook_unknown._infer_site({}) == "unknown"
 
-    @patch("QYT.HistoryLogger.log")
+    @patch("src.qyt.HistoryLogger.log")
     def test_history_hook_call_finished(self, mock_log: MagicMock) -> None:
         """Test HistoryHook.__call__ logs on 'finished' status."""
         meta = {"site": "youtube", "type": "1080"}
@@ -393,7 +393,7 @@ class TestHistoryHook:
         assert args[1]["success"] is True
         assert args[1]["url"] is None
 
-    @patch("QYT.HistoryLogger.log")
+    @patch("src.qyt.HistoryLogger.log")
     def test_history_hook_passes_url(self, mock_log: MagicMock) -> None:
         """Test HistoryHook.__call__ extracts and passes webpage_url."""
         meta = {"site": "youtube", "type": "1080"}
@@ -412,7 +412,7 @@ class TestHistoryHook:
         mock_log.assert_called_once()
         assert mock_log.call_args[1]["url"] == "https://www.youtube.com/watch?v=abc"
 
-    @patch("QYT.HistoryLogger.log")
+    @patch("src.qyt.HistoryLogger.log")
     def test_history_hook_call_deduplication(
         self,
         mock_log: MagicMock,
@@ -469,7 +469,7 @@ class TestQYTQueue:
 
         timeout = subprocess.TimeoutExpired(cmd=["deno", "run"], timeout=15.0)
         with (
-            patch("QYT.keep"),
+            patch("src.qyt.keep"),
             patch.object(ydl_queue, "download", side_effect=timeout),
             pytest.raises(_StopLoop),
         ):
@@ -503,7 +503,7 @@ class TestQYTQueue:
 
         timeout = subprocess.TimeoutExpired(cmd=["deno", "run"], timeout=15.0)
         with (
-            patch("QYT.keep"),
+            patch("src.qyt.keep"),
             patch.object(ydl_queue, "download", side_effect=[timeout, None]),
             pytest.raises(_StopLoop),
         ):
@@ -571,8 +571,8 @@ class TestQYTQueue:
         ydl_queue.message_changed.connect(messages.append)
 
         with (
-            patch("QYT.deno_warmup_pending", return_value=True) as mock_pending,
-            patch("QYT.wait_for_deno_warm") as mock_wait,
+            patch("src.qyt.deno_warmup_pending", return_value=True) as mock_pending,
+            patch("src.qyt.wait_for_deno_warm") as mock_wait,
         ):
             ydl_queue._await_deno_warm()
             ydl_queue._await_deno_warm()
@@ -595,8 +595,8 @@ class TestQYTQueue:
         ydl_queue.message_changed.connect(messages.append)
 
         with (
-            patch("QYT.deno_warmup_pending", return_value=False),
-            patch("QYT.wait_for_deno_warm") as mock_wait,
+            patch("src.qyt.deno_warmup_pending", return_value=False),
+            patch("src.qyt.wait_for_deno_warm") as mock_wait,
         ):
             ydl_queue._await_deno_warm()
 
@@ -620,8 +620,8 @@ class TestQYTQueue:
         ydl_queue.message_changed.connect(messages.append)
 
         with (
-            patch("QYT.deno_warmup_pending", return_value=False) as mock_pending,
-            patch("QYT.wait_for_deno_warm") as mock_wait,
+            patch("src.qyt.deno_warmup_pending", return_value=False) as mock_pending,
+            patch("src.qyt.wait_for_deno_warm") as mock_wait,
         ):
             ydl_queue._await_deno_warm()
             ydl_queue._await_deno_warm()

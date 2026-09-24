@@ -9,13 +9,12 @@ from typing import Any
 import requests
 from genekit.tz import format_timestamp
 
-import utils
 from src.config import (
     HTTP_OK,
     HTTP_REQUEST_TIMEOUT_SECONDS,
     PODCAST_MIN_DURATION_SECONDS,
 )
-from src.logging_utils import get_local_timestamp
+from src.logging_utils import get_local_timestamp, log_exception
 
 # Extractor key prefixed to each download-archive line ("youtube <video_id>").
 ARCHIVE_EXTRACTOR = "youtube"
@@ -41,7 +40,7 @@ def parse_video_timestamp(entry: dict[str, Any]) -> float | None:
             )
         except (ValueError, TypeError) as exc:
             ts = None
-            utils.log_exception(exc, "Failed to parse upload_date timestamp")
+            log_exception(exc, "Failed to parse upload_date timestamp")
     return ts
 
 
@@ -76,7 +75,7 @@ def load_downloaded_video_ids(archive_path: str | None) -> set[str]:
                 if parts:
                     existing_ids.add(parts[-1])
     except (OSError, UnicodeDecodeError) as exc:
-        utils.log_exception(
+        log_exception(
             exc,
             "Failed to read download archive for podcast filtering",
         )
@@ -163,7 +162,7 @@ def append_to_archive_and_mark_skipped(
         try:
             append_downloaded_video_ids(archive_path, [vid], existing_ids)
         except OSError as exc:
-            utils.log_exception(
+            log_exception(
                 exc,
                 "Failed to write skip marker to download archive",
             )
@@ -275,7 +274,7 @@ def check_sponsorblock_for_video_id(video_id: str) -> bool:
             return bool(data)
     except Exception as exc:
         # Catch all exceptions to ensure API issues don't crash the download
-        utils.log_exception(exc, "SponsorBlock API check failed")
+        log_exception(exc, "SponsorBlock API check failed")
     return False
 
 

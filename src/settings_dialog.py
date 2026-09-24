@@ -149,7 +149,7 @@ for _preset in RESOLUTION_PRESETS:
     )
 
 # ============================================================================
-# AppData path (mirrors QYT.py and first_run_wizard.py)
+# AppData path (mirrors src/qyt.py and first_run_wizard.py)
 # ============================================================================
 
 _APPDATA_DIR: Path = Path.home() / "AppData" / "Roaming" / "MeadowLark"

@@ -80,7 +80,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLC0415", "TRY002", "N818", "PT018", "N806", "RUF012", "N802", "N815", "ANN"]
 # PyQt event-handler overrides (dragEnterEvent, dropEvent, ...) must match Qt's API.
-"UIClasses.py" = ["N802"]
+"src/ui_classes.py" = ["N802"]
 # Standalone dev/CLI tools, intentionally not an importable package.
 "scripts/**" = ["INP001"]
 

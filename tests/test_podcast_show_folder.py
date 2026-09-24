@@ -153,7 +153,7 @@ def test_window_check_pending_queue_restores_show_folder(tmp_path: Path) -> None
             )
 
         def get_options(self, urls, source, skip_playlist_dialog=False):
-            return dict(vd.utils.get_source_options(source))
+            return dict(vd.get_source_options(source))
 
         def append_properties(self, ydl_opts, properties):
             ydl_opts.update(properties)

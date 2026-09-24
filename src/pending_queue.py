@@ -62,9 +62,7 @@ def load_pending_queue(path: Path) -> list[PendingRecord]:
 def save_pending_queue(path: Path, records: list[PendingRecord]) -> None:
     """Write pending records atomically; never raises on write failure."""
     try:
-        atomic_write_text(
-            path, json.dumps(records, ensure_ascii=False, indent=1), mkdir=True
-        )
+        atomic_write_text(path, json.dumps(records, ensure_ascii=False, indent=1), mkdir=True)
     except OSError as exc:
         log_exception(exc, f"save_pending_queue: could not write {path}")
 

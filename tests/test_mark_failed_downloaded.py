@@ -92,7 +92,7 @@ def test_oserror_on_archive_write_logs_and_does_not_delete(tmp_path: Path) -> No
 
     with (
         patch("meadowlark.ARCHIVE_PATH", archive_file),
-        patch("meadowlark.utils.log_exception") as mock_log_exception,
+        patch("meadowlark.log_exception") as mock_log_exception,
         patch.object(type(archive_file), "open", side_effect=OSError("disk full")),
     ):
         win._mark_failed_downloaded([record])
@@ -234,7 +234,7 @@ def test_clear_resolved_failures_oserror_logged_and_swallowed(tmp_path: Path) ->
 
     with (
         patch("meadowlark.FAILED_DOWNLOADS_FILE", store),
-        patch("meadowlark.utils.log_exception") as mock_log_exception,
+        patch("meadowlark.log_exception") as mock_log_exception,
     ):
         win._clear_resolved_failures("https://youtu.be/abc123")
 

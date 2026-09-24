@@ -24,7 +24,7 @@ def test_mf_skips_scheduled() -> None:
 
 def test_mf_none_info_calls_log_exception_and_returns_none() -> None:
     mf = _make_mf()
-    with patch("utils.log_exception") as mock_log:
+    with patch("src.match_filter.log_exception") as mock_log:
         result = mf(None, False)  # type: ignore[arg-type]
     assert result is None
     mock_log.assert_called_once()
@@ -110,7 +110,7 @@ def test_mf_add_fn_raises_os_error_returns_none_and_logs() -> None:
     add_fn = MagicMock(side_effect=OSError("disk full"))
     log_fn = MagicMock()
     mf = build_match_filter("1080playlists", add_fn, log_fn)
-    with patch("utils.log_exception") as mock_log:
+    with patch("src.match_filter.log_exception") as mock_log:
         result = mf(
             {
                 "is_live": True,
@@ -128,7 +128,7 @@ def test_mf_log_fn_raises_runtime_error_returns_none_and_logs() -> None:
     add_fn = MagicMock()
     log_fn = MagicMock(side_effect=RuntimeError("signal destroyed"))
     mf = build_match_filter("1080playlists", add_fn, log_fn)
-    with patch("utils.log_exception") as mock_log:
+    with patch("src.match_filter.log_exception") as mock_log:
         result = mf(
             {
                 "is_live": True,

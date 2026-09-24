@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from QYT import QYTQueue
 from src.failed_downloads import (
     ErrorCapturingLogger,
     FailureHook,
@@ -21,6 +20,7 @@ from src.failed_downloads import (
     remove_failed_downloads,
     save_failed_downloads,
 )
+from src.qyt import QYTQueue
 
 _app = QApplication.instance() or QApplication([])
 
@@ -550,7 +550,7 @@ def test_run_crash_path_empty_urls_and_none_item_uses_unknown_placeholders() -> 
     ydl_queue.download_failed.connect(captured.append)
 
     with (
-        patch("QYT.keep"),
+        patch("src.qyt.keep"),
         patch.object(ydl_queue, "download", side_effect=RuntimeError("boom")),
         pytest.raises(_StopLoop),
     ):
@@ -578,7 +578,7 @@ def test_run_crash_path_non_dict_item_meta_falls_back_to_empty() -> None:
     ydl_queue.download_failed.connect(captured.append)
 
     with (
-        patch("QYT.keep"),
+        patch("src.qyt.keep"),
         patch.object(ydl_queue, "download", side_effect=RuntimeError("boom")),
         pytest.raises(_StopLoop),
     ):

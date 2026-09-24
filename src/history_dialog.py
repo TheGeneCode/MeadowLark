@@ -21,11 +21,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from QYT import parse_history_log
-
 from .config import ARCHIVE_PATH
 from .logging_utils import log_exception
 from .podcast_filtering import load_downloaded_video_ids
+from .qyt import parse_history_log
 from .url_utils import extract_video_id, web_url
 
 _COLUMNS = ("Datetime", "Site", "Type", "Title", "Result")

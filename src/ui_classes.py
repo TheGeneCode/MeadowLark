@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-import utils
+from src.logging_utils import log_exception
 from src.playlist_utils import write_template_playlist_file
 from src.settings_dialog import get_setting
 
@@ -256,7 +256,7 @@ class PlaylistButton(QPushButton):
                 except (OSError, ValueError) as exc:
                     # ValueError: Path.exists() swallows an embedded-null-byte path and
                     # returns False, but mkdir/write_text raise ValueError for the same path.
-                    utils.log_exception(
+                    log_exception(
                         exc,
                         "Failed to create template playlist file on right-click",
                     )

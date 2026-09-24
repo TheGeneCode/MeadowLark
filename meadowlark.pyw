@@ -25,7 +25,7 @@ Dependencies:
 - PyQt6
 - yt-dlp
 - hurry.filesize
-- Custom modules: QYT, UIClasses
+- Custom modules: src.qyt, src.ui_classes
 
 Author: Gene
 """
@@ -87,8 +87,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-import QYT
-import utils
+from src import qyt
 from src.config import (
     ALWAYS_ON_TOP,
     ARCHIVE_PATH,
@@ -111,6 +110,7 @@ from src.config import (
     drop_label_for_height,
     playlist_path_for_height,
 )
+from src.dict_utils import merge_dicts_recursive
 from src.failed_downloads import (
     add_failed_download,
     keys_resolved_by_download,
@@ -121,7 +121,9 @@ from src.failed_downloads import (
 from src.failed_downloads_dialog import FailedDownloadsDialog
 from src.first_run_wizard import FirstRunWizard, needs_first_run
 from src.history_dialog import HistoryDialog
+from src.logging_utils import log_exception
 from src.match_filter import build_match_filter
+from src.path_utils import resolve_playlist_label, sanitize_for_path, slugify_if_too_long
 from src.pending_check import PendingCheckDeps
 from src.pending_check import check_pending_queue as run_pending_check
 from src.pending_downloads_dialog import PendingDownloadsDialog
@@ -135,6 +137,11 @@ from src.pending_queue import (
     remove_pending_many,
     save_pending_queue,
     upsert_pending,
+)
+from src.playlist_utils import (
+    detect_site_from_urls,
+    get_playlist_file_for_source,
+    load_playlist_comments_for_source,
 )
 from src.podcast_filtering import (
     PODCAST_MIN_DURATION_SECONDS,
@@ -172,15 +179,18 @@ from src.settings_dialog import (
     enabled_heights,
     get_setting,
 )
+from src.ui_classes import DropLabel, PlaylistButton, PlaylistDialog
 from src.url_utils import extract_playlist_id
+from src.version_utils import is_app_update_available, is_yt_dlp_update_available
 from src.window_geometry import GeometryMemoryDialog
 from src.ydl_options import (
+    build_base_ydl_opts,
     build_podcast_outtmpl,
+    get_source_options,
     podcast_base_dir,
     resolve_cookiefile,
 )
 from src.ydl_utils import extract_playlist_info, extract_video_entries
-from UIClasses import DropLabel, PlaylistButton, PlaylistDialog
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +285,7 @@ def _label_from_comments(url: str, audio_pl_comments: dict) -> str | None:
     """
     pl_id = extract_playlist_id(url)
     if pl_id and pl_id in audio_pl_comments:
-        return utils.sanitize_for_path(audio_pl_comments[pl_id])
+        return sanitize_for_path(audio_pl_comments[pl_id])
     return None
 
 
@@ -330,7 +340,7 @@ class MyWindow(QWidget):
 
         self.playlist_comments = {}
 
-        update_available, _, _ = utils.is_yt_dlp_update_available()
+        update_available, _, _ = is_yt_dlp_update_available()
         self.buttonUpdate.setVisible(update_available)
 
         self._maybe_start_auto_app_update_check()
@@ -537,7 +547,7 @@ class MyWindow(QWidget):
     def _setup_queue_and_downloader(self) -> None:
         """Set up download queue, downloader, and signal connections."""
         self.downloadQueue = queue.Queue()
-        self.downloader = QYT.QYTQueue(self.downloadQueue)
+        self.downloader = qyt.QYTQueue(self.downloadQueue)
         self.downloader.message_changed.connect(self.handle_log_entry)
         self.downloader.queue_empty.connect(self.handle_queue_empty)
         self.downloader.history_entry_added.connect(self._on_history_entry_added)
@@ -585,7 +595,7 @@ class MyWindow(QWidget):
 
     def _load_playlist_urls(self, source: str) -> list[dict[str, str]] | None:
         """Load URLs and associated comments from playlist file for the given source, or return None."""
-        playlists_path = utils.get_playlist_file_for_source(source)
+        playlists_path = get_playlist_file_for_source(source)
         if playlists_path:
             try:
                 playlist_data = []
@@ -685,7 +695,7 @@ class MyWindow(QWidget):
                 self.logEdit.appendPlainText(
                     f"Failed to start podcast check thread: {e}",
                 )
-                utils.log_exception(
+                log_exception(
                     e,
                     "Failed to start podcast check thread",
                 )
@@ -753,7 +763,7 @@ class MyWindow(QWidget):
     def append_properties(self, dictionary: dict, properties: dict) -> dict:
         """Merge properties into dictionary recursively."""
         # Merge properties into dictionary recursively using the shared utility.
-        return utils.merge_dicts_recursive(dictionary, properties)
+        return merge_dicts_recursive(dictionary, properties)
 
     def request_detected(self, urls: list, source: str) -> None:
         """
@@ -790,7 +800,7 @@ class MyWindow(QWidget):
             if ydl_opts:
                 # Provide metadata for history logging
                 ydl_opts["qmeta"] = {
-                    "site": utils.detect_site_from_urls(urls),
+                    "site": detect_site_from_urls(urls),
                     "type": source,
                 }
                 # Pass playlist comments for fallback folder naming
@@ -812,7 +822,7 @@ class MyWindow(QWidget):
     def skip_downloading(self, urls: list, source: str) -> None:
         """Skip downloading the given URLs for the source."""
         self.labelOutput.setText("Skipping downloads.")
-        qlogger = QYT.QLogger(self.downloadQueue)
+        qlogger = qyt.QLogger(self.downloadQueue)
         total_added = 0
         # One running set across URLs: a video in two dropped playlists is written once.
         existing_ids = load_downloaded_video_ids(str(ARCHIVE_PATH))
@@ -894,7 +904,7 @@ class MyWindow(QWidget):
             properties.update(playlist_props)
 
         # Get source-specific options
-        source_props = utils.get_source_options(source)
+        source_props = get_source_options(source)
         properties.update(source_props)
 
         return properties
@@ -992,7 +1002,7 @@ class MyWindow(QWidget):
         )  # (update_available, latest_tag, download_url)
 
         def run(self) -> None:
-            update_available, tag, url = utils.is_app_update_available()
+            update_available, tag, url = is_app_update_available()
             self.finished.emit(bool(update_available), tag or "", url or "")
 
     class _PodcastCheckWorker(QObject):
@@ -1046,7 +1056,7 @@ class MyWindow(QWidget):
             except Exception as exc:
                 to_download, pending, had_error = [], [], True
                 errors.append(f"Podcast check worker exception: {exc}")
-                utils.log_exception(exc, "Podcast check worker exception")
+                log_exception(exc, "Podcast check worker exception")
             # Emit results back to the main thread; the main thread will perform any GUI logging.
             with contextlib.suppress(RuntimeError):
                 self.finished.emit(to_download, pending, had_error, errors, statuses)
@@ -1076,26 +1086,26 @@ class MyWindow(QWidget):
         """Save the parked-download records to the store."""
         save_pending_queue(self.pending_queue_path, records)
 
-    def _create_download_context(self) -> tuple[QYT.QHook, QYT.QLogger, dict]:
+    def _create_download_context(self) -> tuple[qyt.QHook, qyt.QLogger, dict]:
         """Create a fresh QHook, QLogger, and base ydl_opts dict."""
-        qhook = QYT.QHook()
-        qlogger = QYT.QLogger(self.downloadQueue)
-        ydl_opts = utils.build_base_ydl_opts(qlogger, qhook)
+        qhook = qyt.QHook()
+        qlogger = qyt.QLogger(self.downloadQueue)
+        ydl_opts = build_base_ydl_opts(qlogger, qhook)
         return qhook, qlogger, ydl_opts
 
     def _fork_download_context(
         self,
         base_opts: dict,
-    ) -> tuple[QYT.QHook, QYT.QLogger, dict]:
+    ) -> tuple[qyt.QHook, qyt.QLogger, dict]:
         """Create a fresh QHook/QLogger and return a copy of base_opts with them wired in."""
-        qhook = QYT.QHook()
-        qlogger = QYT.QLogger(self.downloadQueue)
+        qhook = qyt.QHook()
+        qlogger = qyt.QLogger(self.downloadQueue)
         opts = dict(base_opts)
         opts["logger"] = qlogger
         opts["progress_hooks"] = [qhook]
         return qhook, qlogger, opts
 
-    def _wire_download_signals(self, qhook: QYT.QHook, qlogger: QYT.QLogger) -> None:
+    def _wire_download_signals(self, qhook: qyt.QHook, qlogger: qyt.QLogger) -> None:
         """Connect qhook/qlogger signals to the main window handler slots."""
         qhook.info_changed.connect(self.handle_info_changed)
         qlogger.message_changed.connect(self.handle_log_entry)
@@ -1129,8 +1139,8 @@ class MyWindow(QWidget):
             enqueue=lambda urls, opts: self.downloadQueue.put((urls, opts)),
             log=self.logEdit.appendPlainText,
             set_progress_range=self.barProgress.setRange,
-            detect_site=utils.detect_site_from_urls,
-            load_playlist_comments=utils.load_playlist_comments_for_source,
+            detect_site=detect_site_from_urls,
+            load_playlist_comments=load_playlist_comments_for_source,
             ydl_class=yt_dlp.YoutubeDL,
         )
 
@@ -1172,8 +1182,8 @@ class MyWindow(QWidget):
             messages,
         )
         status_entry["status"] = "Skipped (Update)"
-        QYT.HistoryLogger().log_skip(
-            site=utils.detect_site_from_urls([webpage]),
+        qyt.HistoryLogger().log_skip(
+            site=detect_site_from_urls([webpage]),
             dtype="audio_playlists",
             title=title,
             reason="Update exception",
@@ -1203,8 +1213,8 @@ class MyWindow(QWidget):
             reason="Short duration (<3 min)",
         )
         status_entry["status"] = "Skipped Short"
-        QYT.HistoryLogger().log_skip(
-            site=utils.detect_site_from_urls([webpage]),
+        qyt.HistoryLogger().log_skip(
+            site=detect_site_from_urls([webpage]),
             dtype="audio_playlists",
             title=title,
             reason="Short duration (<3 min)",
@@ -1238,7 +1248,7 @@ class MyWindow(QWidget):
             to_download.append(obj)
             status_entry["status"] = "Ready"
             return
-        site = utils.detect_site_from_urls([webpage])
+        site = detect_site_from_urls([webpage])
         if site != "youtube" or check_sponsorblock_for_video_id(vid):
             to_download.append(obj)
             status_entry["status"] = "Ready"
@@ -1279,7 +1289,7 @@ class MyWindow(QWidget):
         archive_path = ydl_opts.get("download_archive")
         existing_ids: set[str] = load_downloaded_video_ids(archive_path)
         now_ts = datetime.now(tz=UTC).timestamp()
-        audio_pl_comments = utils.load_playlist_comments_for_source("audio_playlists")
+        audio_pl_comments = load_playlist_comments_for_source("audio_playlists")
 
         for url in urls:
             try:
@@ -1290,7 +1300,7 @@ class MyWindow(QWidget):
                     )
                 playlist_label = _label_from_comments(
                     url, audio_pl_comments
-                ) or utils.resolve_playlist_label(info, url)
+                ) or resolve_playlist_label(info, url)
                 status_entry = _make_podcast_status_entry(playlist_label, url)
 
                 vid: str | None = None
@@ -1347,7 +1357,7 @@ class MyWindow(QWidget):
                 )
                 statuses.append(status_entry)
             except YDL_EXTRACTION_ERRORS as e:
-                utils.log_exception(e, f"Error expanding playlist/url {url}")
+                log_exception(e, f"Error expanding playlist/url {url}")
                 errstr = str(e)
                 scheduled_ts = parse_scheduled_time_from_error(errstr)
                 if scheduled_ts:
@@ -1436,7 +1446,7 @@ class MyWindow(QWidget):
                 existing.raise_()
                 existing.activateWindow()
             except (RuntimeError, AttributeError) as exc:
-                utils.log_exception(
+                log_exception(
                     exc,
                     "Failed to focus existing podcast status dialog",
                 )
@@ -1507,7 +1517,7 @@ class MyWindow(QWidget):
                 existing.raise_()
                 existing.activateWindow()
             except RuntimeError as exc:
-                utils.log_exception(exc, "Failed to focus pending-downloads dialog")
+                log_exception(exc, "Failed to focus pending-downloads dialog")
             else:
                 return
 
@@ -1560,7 +1570,7 @@ class MyWindow(QWidget):
                 self._failed_dialog.set_records(records)
         except OSError as exc:
             # A broken store file must never take down the slot.
-            utils.log_exception(exc, "Failed to persist failed download")
+            log_exception(exc, "Failed to persist failed download")
 
     def _park_not_yet_released(self, record: dict) -> None:
         """
@@ -1589,7 +1599,7 @@ class MyWindow(QWidget):
                 ),
             )
         except OSError as exc:
-            utils.log_exception(exc, "Failed to park not-yet-released download")
+            log_exception(exc, "Failed to park not-yet-released download")
             return
         self.handle_log_entry(f"Not released yet, parked: {record.get('title') or url}")
         self.check_pending_queue()
@@ -1606,7 +1616,7 @@ class MyWindow(QWidget):
                 existing.raise_()
                 existing.activateWindow()
             except RuntimeError as exc:
-                utils.log_exception(exc, "Failed to focus failed-downloads dialog")
+                log_exception(exc, "Failed to focus failed-downloads dialog")
             else:
                 return
 
@@ -1665,7 +1675,7 @@ class MyWindow(QWidget):
             # The helper dedupes too: two records can share one video id.
             append_downloaded_video_ids(ARCHIVE_PATH, [vid for _, vid in marked])
         except OSError as exc:
-            utils.log_exception(exc, "Failed to add videos to archive from Failed Downloads")
+            log_exception(exc, "Failed to add videos to archive from Failed Downloads")
             return
         self._delete_failed_downloads([r.get("key") for r, _ in marked])
         for record, vid in marked:
@@ -1679,7 +1689,7 @@ class MyWindow(QWidget):
                 existing.raise_()
                 existing.activateWindow()
             except (RuntimeError, AttributeError) as exc:
-                utils.log_exception(exc, "Failed to focus existing history dialog")
+                log_exception(exc, "Failed to focus existing history dialog")
             return
 
         dialog = HistoryDialog(self)
@@ -1706,7 +1716,7 @@ class MyWindow(QWidget):
                 self._delete_failed_downloads(keys)
         except OSError as exc:
             # An exception escaping a Qt slot aborts the interpreter.
-            utils.log_exception(exc, "Failed to clear resolved failed downloads")
+            log_exception(exc, "Failed to clear resolved failed downloads")
 
     # Cache TTL: 6 hours
     CACHE_TTL_SECONDS = 6 * 60 * 60
@@ -1786,7 +1796,7 @@ class MyWindow(QWidget):
             action(row)
         except Exception as exc:
             self.logEdit.appendPlainText(f"Failed to {error_label}: {exc}")
-            utils.log_exception(exc, f"Error in status menu action: {error_label}")
+            log_exception(exc, f"Error in status menu action: {error_label}")
 
     def _open_latest_for_row(self, row: int) -> None:
         """Open the latest episode for the podcast at ``row`` in a browser."""
@@ -1842,7 +1852,7 @@ class MyWindow(QWidget):
                 return {"url": webpage, "ts": ts}
             return None
         except YDL_COMMON_ERRORS as exc:
-            utils.log_exception(
+            log_exception(
                 exc,
                 f"Failed to resolve latest episode via yt-dlp for {playlist_url}",
             )
@@ -1865,7 +1875,7 @@ class MyWindow(QWidget):
                 )
                 return True
         except (webbrowser.Error, OSError) as exc:
-            utils.log_exception(exc, "Failed to open URL in default browser")
+            log_exception(exc, "Failed to open URL in default browser")
         return False
 
     def _get_brave_controller(self) -> webbrowser.BaseBrowser | None:
@@ -1873,7 +1883,7 @@ class MyWindow(QWidget):
         try:
             return webbrowser.get("brave")
         except (webbrowser.Error, OSError) as exc:
-            utils.log_exception(
+            log_exception(
                 exc,
                 "Failed to get Brave controller via webbrowser.get",
             )
@@ -1902,7 +1912,7 @@ class MyWindow(QWidget):
                 return
         except (webbrowser.Error, OSError) as e:
             self.logEdit.appendPlainText(f"Failed to open Brave: {e}")
-            utils.log_exception(e, "Failed to open URL in Brave")
+            log_exception(e, "Failed to open URL in Brave")
         self.logEdit.appendPlainText(f"Failed to open latest for {label or latest_url}")
 
     def _refresh_podcast_status_dialog(self) -> None:
@@ -1956,7 +1966,7 @@ class MyWindow(QWidget):
             ydl_opts = self.append_properties(ydl_opts, properties)
             # attach metadata used by history/logging code
             ydl_opts["qmeta"] = {
-                "site": utils.detect_site_from_urls([playlist_url]),
+                "site": detect_site_from_urls([playlist_url]),
                 "type": "audio_playlists",
             }
 
@@ -2036,7 +2046,7 @@ class MyWindow(QWidget):
                             self.logEdit.appendPlainText(
                                 f"Failed to schedule recheck timer for {url}",
                             )
-                            utils.log_exception(
+                            log_exception(
                                 exc,
                                 f"Failed to schedule recheck timer for {url}",
                             )
@@ -2047,7 +2057,7 @@ class MyWindow(QWidget):
                         with contextlib.suppress(Exception):
                             t.stop()
             except (AttributeError, TypeError, KeyError, RuntimeError) as exc:
-                utils.log_exception(
+                log_exception(
                     exc,
                     "Unexpected error while processing podcast statuses",
                 )
@@ -2065,11 +2075,11 @@ class MyWindow(QWidget):
                 label = obj.get("playlist") or "misc"
             except (AttributeError, TypeError) as exc:
                 label = "misc"
-                utils.log_exception(
+                log_exception(
                     exc,
                     "Failed to read playlist label from podcast object",
                 )
-            safe_label = utils.slugify_if_too_long(base_dir, label)
+            safe_label = slugify_if_too_long(base_dir, label)
             url = obj.get("url") if isinstance(obj, dict) else obj
             if url:
                 groups.setdefault(safe_label, []).append(url)
@@ -2174,7 +2184,7 @@ class MyWindow(QWidget):
             self._refresh_podcast_status_dialog()
         except (RuntimeError, AttributeError) as e:
             self.logEdit.appendPlainText(f"Error refreshing Podcast Status dialog: {e}")
-            utils.log_exception(e, "Error refreshing Podcast Status dialog")
+            log_exception(e, "Error refreshing Podcast Status dialog")
 
     def _shutdown_podcast_thread(self) -> None:
         """Attempt a clean shutdown of any running podcast worker thread."""
@@ -2199,11 +2209,11 @@ class MyWindow(QWidget):
                         self.logEdit.appendPlainText(
                             f"Error terminating podcast thread: {e}",
                         )
-                        utils.log_exception(e, "Error terminating podcast thread")
+                        log_exception(e, "Error terminating podcast thread")
                     thread.wait(THREAD_TERMINATE_TIMEOUT_MS)
         except (RuntimeError, OSError) as e:
             self.logEdit.appendPlainText(f"Error shutting down podcast thread: {e}")
-            utils.log_exception(e, "Error shutting down podcast thread")
+            log_exception(e, "Error shutting down podcast thread")
         finally:
             self._podcast_worker = None
             self._podcast_worker_thread = None
@@ -2224,7 +2234,7 @@ class MyWindow(QWidget):
                 dialog.save_geometry()
         except RuntimeError as e:
             # The dialog's C++ object is already gone; nothing left to measure.
-            utils.log_exception(e, "Failed to save Podcast Status window geometry")
+            log_exception(e, "Failed to save Podcast Status window geometry")
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         """Ensure background podcast checks are stopped when the window closes."""

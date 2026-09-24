@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 
-# Mirrors QYT.py: load .env before any test module imports src.config (or anything
+# Mirrors src/qyt.py: load .env before any test module imports src.config (or anything
 # that imports it) at module scope. Without this, whichever test file happens to be
 # collected first freezes config's os.getenv-backed constants (e.g. VIDEO_STORAGE_DIR)
 # to their hardcoded defaults instead of the .env overrides, since those constants are
 # computed once at first import and .env loading used to only happen incidentally,
-# whenever some test's import chain first pulled in QYT. That made a handful of
+# whenever some test's import chain first pulled in src.qyt. That made a handful of
 # TestRuntimeDirectoryOverrides-style tests in test_format_settings.py pass or fail
 # depending on which other test files existed and in what order pytest collected them.
 _user_env = Path.home() / "AppData" / "Roaming" / "MeadowLark" / ".env"

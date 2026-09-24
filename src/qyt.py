@@ -21,7 +21,6 @@ load_dotenv()  # also load project .env in dev (won't override vars already set)
 
 from genekit.logging import configure_logging  # noqa: E402
 
-import utils  # noqa: E402  (imported after load_dotenv so env is set at import time)
 from src.config import (  # noqa: E402
     ERROR_LOG_PATH,
     HISTORY_LOG_PATH,
@@ -32,10 +31,12 @@ from src.failed_downloads import (  # noqa: E402
     ErrorCapturingLogger,
     FailureHook,
     make_failed_record,
+    progress_item_key,
 )
 from src.logging_utils import (  # noqa: E402
     get_local_timestamp,
     get_ytdlp_debug_logger,
+    log_exception,
 )
 from src.pot_provider import deno_warmup_pending, wait_for_deno_warm  # noqa: E402
 
@@ -48,7 +49,7 @@ if LOGFILE_MIGRATION_ENABLED:
             Path("logfile.txt").replace(ERROR_LOG_PATH)
     except OSError as exc:
         # Never fail on migration, but do record the issue for later diagnosis
-        utils.log_exception(exc, "Failed to migrate logfile.txt to error_log.txt")
+        log_exception(exc, "Failed to migrate logfile.txt to error_log.txt")
 
 
 class QLogger(QObject):
@@ -223,7 +224,7 @@ class HistoryLogger:
                 )
         except OSError as exc:
             # Never allow history logging to crash downloading, but record it
-            utils.log_exception(exc, "HistoryLogger failed to write to history_log.txt")
+            log_exception(exc, "HistoryLogger failed to write to history_log.txt")
 
     def log(
         self,
@@ -260,7 +261,7 @@ class HistoryLogger:
                     }
                 )
             except (RuntimeError, AttributeError, TypeError, OSError) as exc:
-                utils.log_exception(exc, "HistoryLogger: on_log callback failed")
+                log_exception(exc, "HistoryLogger: on_log callback failed")
 
     def log_skip(self, site: str, dtype: str, title: str, reason: str) -> None:
         """
@@ -288,7 +289,7 @@ class HistoryLogger:
                     }
                 )
             except (RuntimeError, AttributeError, TypeError, OSError) as exc:
-                utils.log_exception(exc, "HistoryLogger: on_log callback failed")
+                log_exception(exc, "HistoryLogger: on_log callback failed")
 
 
 _HISTORY_RE = re.compile(
@@ -372,13 +373,7 @@ class HistoryHook:
         return site
 
     def _vid_id(self, info: dict) -> str:
-        return str(
-            info.get("id")
-            or info.get("_filename")
-            or info.get("url")
-            or info.get("playlist_id")
-            or "unknown",
-        )
+        return progress_item_key(info)
 
     def __call__(self, d: dict) -> None:
         """
@@ -417,7 +412,7 @@ class HistoryHook:
                 self._seen_ids.add(vid)
         except (AttributeError, TypeError, OSError) as exc:
             # Never let history logging break the download, but capture it
-            utils.log_exception(
+            log_exception(
                 exc,
                 "HistoryHook failed while logging download history",
             )
@@ -485,7 +480,7 @@ class QYTQueue(QThread):
                 # raise subprocess.TimeoutExpired), so the set of exception types
                 # crossing this boundary is not enumerable in advance.
                 except Exception as exc:
-                    utils.log_exception(exc, f"QYTQueue.run: unhandled error for {item[0]}")
+                    log_exception(exc, f"QYTQueue.run: unhandled error for {item[0]}")
                     self.message_changed.emit(f"------  Download error  ------\n{item[0]}")
                     # Title is the URL here: no network title lookup in the crash path.
                     qmeta = (item[1] or {}).get("qmeta") if isinstance(item[1], dict) else {}
@@ -600,7 +595,7 @@ class QYTQueue(QThread):
             # overlap when the hook and the batch record catch the same video.
             failure_hook.flush()
         except Exception as exc:
-            utils.log_exception(exc, f"QYTQueue.download: unexpected error for {urls}")
+            log_exception(exc, f"QYTQueue.download: unexpected error for {urls}")
             raise
         finally:
             for hook in options.get("progress_hooks", []):

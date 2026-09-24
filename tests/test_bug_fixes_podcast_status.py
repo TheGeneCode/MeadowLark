@@ -141,18 +141,14 @@ class TestLabelFromComments:
 
     def test_label_returned_when_pl_id_in_comments(self, monkeypatch) -> None:
         """Return sanitize_for_path(label) when pl_id found in comments."""
-        import utils as u
-
-        monkeypatch.setattr(u, "sanitize_for_path", lambda s: s.strip())
+        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s.strip())
         url = "https://www.youtube.com/playlist?list=PLabc123"
         result = self.vd._label_from_comments(url, {"PLabc123": "My Podcast"})
         assert result == "My Podcast"
 
     def test_label_passes_through_sanitize_for_path(self, monkeypatch) -> None:
         """Apply sanitize_for_path transformation to the retrieved label."""
-        import utils as u
-
-        monkeypatch.setattr(u, "sanitize_for_path", lambda s: s.replace(" ", "_"))
+        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s.replace(" ", "_"))
         url = "https://www.youtube.com/playlist?list=PLsanitize"
         result = self.vd._label_from_comments(url, {"PLsanitize": "My Cool Show"})
         assert result == "My_Cool_Show"
@@ -206,9 +202,7 @@ class TestLabelFromComments:
         fallback activates — that is the correct behaviour.  This test documents
         the contract so the interaction is not silently changed.
         """
-        import utils as u
-
-        monkeypatch.setattr(u, "sanitize_for_path", lambda s: s)
+        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s)
         url = "https://www.youtube.com/playlist?list=PLempty"
         result = self.vd._label_from_comments(url, {"PLempty": ""})
         assert not result  # "" is falsy — callers' `or fallback` will engage
@@ -352,11 +346,10 @@ class TestResolveLatestViaYtdlp:
             if isinstance(vd.YDL_COMMON_ERRORS, tuple)
             else vd.YDL_COMMON_ERRORS
         )
-        import utils as u
 
         with (
             patch.object(vd, "extract_playlist_info", side_effect=ydl_error_class("err")),
-            patch.object(u, "log_exception"),
+            patch.object(self.vd, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/err")
         assert result is None
@@ -417,11 +410,10 @@ class TestResolveLatestViaYtdlp:
         win = self._make_win()
         download_error = vd.YDL_COMMON_ERRORS[0]
         err = "ERROR: [youtube] dQw4w9WgXcQ: This live event will begin in 2 hours."
-        import utils as u
 
         with (
             patch.object(vd, "extract_playlist_info", side_effect=download_error(err)),
-            patch.object(u, "log_exception"),
+            patch.object(self.vd, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/premiere")
         assert result is not None
@@ -435,11 +427,10 @@ class TestResolveLatestViaYtdlp:
         vd = self.vd
         win = self._make_win()
         download_error = vd.YDL_COMMON_ERRORS[0]
-        import utils as u
 
         with (
             patch.object(vd, "extract_playlist_info", side_effect=download_error("network down")),
-            patch.object(u, "log_exception"),
+            patch.object(self.vd, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/nodverr")
         assert result is None
@@ -466,7 +457,7 @@ class TestGuardedStatusAction:
     The guard must:
     1. Swallow any Exception subclass.
     2. Call logEdit.appendPlainText with an error message.
-    3. Call utils.log_exception.
+    3. Call log_exception.
     4. NOT propagate the exception.
     5. NOT log anything on a successful call.
     6. NOT swallow BaseException subclasses outside Exception (e.g. KeyboardInterrupt).
@@ -490,9 +481,8 @@ class TestGuardedStatusAction:
         """Catch RuntimeError inside action; method must return normally."""
         vd = self.vd
         win = _make_stub_win(vd)
-        import utils as u
 
-        with patch.object(u, "log_exception"):
+        with patch.object(self.vd, "log_exception"):
             self._call_guard(win, _raise(RuntimeError("oops")), 0)
         # reaching here means no exception escaped
 
@@ -500,9 +490,8 @@ class TestGuardedStatusAction:
         """Append an error message to logEdit when action raises RuntimeError."""
         vd = self.vd
         win = _make_stub_win(vd)
-        import utils as u
 
-        with patch.object(u, "log_exception"):
+        with patch.object(self.vd, "log_exception"):
             self._call_guard(
                 win,
                 _raise(RuntimeError("boom")),
@@ -514,12 +503,11 @@ class TestGuardedStatusAction:
         )
 
     def test_runtime_error_calls_utils_log_exception(self) -> None:
-        """Forward RuntimeError to utils.log_exception exactly once."""
+        """Forward RuntimeError to log_exception exactly once."""
         vd = self.vd
         win = _make_stub_win(vd)
-        import utils as u
 
-        with patch.object(u, "log_exception") as mock_log_exc:
+        with patch.object(self.vd, "log_exception") as mock_log_exc:
             self._call_guard(win, _raise(RuntimeError("detail")), 0)
         mock_log_exc.assert_called_once()
 
@@ -529,9 +517,8 @@ class TestGuardedStatusAction:
         """Catch AttributeError (original BUG 2 crash scenario) silently."""
         vd = self.vd
         win = _make_stub_win(vd)
-        import utils as u
 
-        with patch.object(u, "log_exception"):
+        with patch.object(self.vd, "log_exception"):
             self._call_guard(
                 win,
                 _raise(AttributeError("NoneType has no .get")),
@@ -561,13 +548,12 @@ class TestGuardedStatusAction:
         """Catch IndexError raised inside action for a negative row value."""
         vd = self.vd
         win = _make_stub_win(vd)
-        import utils as u
 
         def _action_with_index(row: int) -> None:
             data: list[int] = []
             _ = data[row]  # raises IndexError for row=-1
 
-        with patch.object(u, "log_exception"):
+        with patch.object(self.vd, "log_exception"):
             self._call_guard(win, _action_with_index, -1, error_label="bad index")
         assert any("bad index" in line for line in win._logged_lines)
 
@@ -593,17 +579,16 @@ class TestGuardedStatusAction:
     # --- error_label appears in both the log message and log_exception call ---
 
     def test_error_label_forwarded_to_log_exception(self) -> None:
-        """Include error_label string in the utils.log_exception call arguments."""
+        """Include error_label string in the log_exception call arguments."""
         vd = self.vd
         win = _make_stub_win(vd)
-        import utils as u
 
         logged_msgs: list[str] = []
 
         def _capture_log_exc(exc: object, msg: str) -> None:
             logged_msgs.append(msg)
 
-        with patch.object(u, "log_exception", side_effect=_capture_log_exc):
+        with patch.object(self.vd, "log_exception", side_effect=_capture_log_exc):
             self._call_guard(
                 win,
                 _raise(ValueError("x")),
@@ -611,7 +596,7 @@ class TestGuardedStatusAction:
                 error_label="start download now",
             )
         assert any("start download now" in m for m in logged_msgs), (
-            "error_label must appear in utils.log_exception message"
+            "error_label must appear in log_exception message"
         )
 
     # --- Verify both menu action paths feed through the guard ---
@@ -627,7 +612,6 @@ class TestGuardedStatusAction:
         # Build a status entry with no latest_url (forces the ytdlp fallback path)
         statuses = [{"url": "http://pl/upcoming", "podcast": "My Show"}]
         win = _make_stub_win(vd, statuses=statuses)
-        import utils as u
 
         with (
             patch.object(
@@ -635,7 +619,7 @@ class TestGuardedStatusAction:
                 "_resolve_latest_via_ytdlp",
                 side_effect=AttributeError("'NoneType' object has no attribute 'get'"),
             ),
-            patch.object(u, "log_exception"),
+            patch.object(self.vd, "log_exception"),
             patch.object(vd.MyWindow, "_cache_get_fresh", return_value=None),
         ):
             self._call_guard(
@@ -867,9 +851,7 @@ class TestLabelFromCommentsAdditional:
 
     def test_label_with_windows_invalid_chars_is_sanitized(self, monkeypatch) -> None:
         """Labels with Windows-invalid characters pass through sanitize_for_path."""
-        import utils as u
-
-        monkeypatch.setattr(u, "sanitize_for_path", lambda s: s.replace(":", "_"))
+        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s.replace(":", "_"))
         url = "https://www.youtube.com/playlist?list=PLcolon"
         result = self.vd._label_from_comments(url, {"PLcolon": "Show: The Podcast"})
         assert result == "Show_ The Podcast"
@@ -901,10 +883,9 @@ class TestScheduledPremiereStatus:
     def test_scheduled_premiere_status_carries_latest_url(self, monkeypatch) -> None:
         """Recover latest_url for a scheduled premiere that errors before yielding."""
         vd = self.vd
-        import utils as u
 
-        monkeypatch.setattr(u, "load_playlist_comments_for_source", lambda _: {})
-        monkeypatch.setattr(u, "sanitize_for_path", lambda s: s)
+        monkeypatch.setattr(self.vd, "load_playlist_comments_for_source", lambda _: {})
+        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s)
 
         from tests._vd_loader import _make_dummy_win
 
@@ -947,17 +928,16 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
 
     def _run(self, url: str, error: Exception, ydl_opts: dict | None = None):
         """Run _filter_audio_playlist_urls with a fetch that always raises ``error``."""
-        import utils as u
         from tests._vd_loader import _make_dummy_win
 
         vd = self.vd
         with (
             patch.object(
-                u,
+                self.vd,
                 "load_playlist_comments_for_source",
                 return_value={},
             ),
-            patch.object(u, "sanitize_for_path", lambda s: s),
+            patch.object(self.vd, "sanitize_for_path", lambda s: s),
         ):
             win = _make_dummy_win(vd)
             with patch.object(vd, "fetch_latest_accessible_entry", side_effect=error):
@@ -1081,8 +1061,6 @@ class TestResolveLatestViaYtdlpTsNone:
 
     def test_recover_video_id_with_ts_none_when_no_schedule_phrase(self) -> None:
         """Return {url: ..., ts: None} when error names a video but no schedule info."""
-        import utils as u
-
         vd = self.vd
         win = _make_stub_win(vd)
         download_error = vd.YDL_COMMON_ERRORS[0]
@@ -1091,7 +1069,7 @@ class TestResolveLatestViaYtdlpTsNone:
 
         with (
             patch.object(vd, "extract_playlist_info", side_effect=download_error(err)),
-            patch.object(u, "log_exception"),
+            patch.object(self.vd, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/members")
 

@@ -205,7 +205,7 @@ class TestTryWithoutSponsorblock:
         )
         assert success is False
 
-    @patch("src.download_executor.utils.remove_sponsorblock_postprocessor")
+    @patch("src.download_executor.remove_sponsorblock_postprocessor")
     @patch("src.download_executor.YoutubeDL")
     def test_sponsorblock_fallback_success(
         self,
@@ -232,7 +232,7 @@ class TestTryWithoutSponsorblock:
         callback.assert_called_once()
         assert "SponsorBlock" in callback.call_args[0][0]
 
-    @patch("src.download_executor.utils.remove_sponsorblock_postprocessor")
+    @patch("src.download_executor.remove_sponsorblock_postprocessor")
     @patch("src.download_executor.YoutubeDL")
     def test_sponsorblock_fallback_failure(
         self,
@@ -351,7 +351,7 @@ class TestExecute:
         mock_ydl_instance.download.side_effect = side_effect
         mock_ydl_class.return_value.__enter__.return_value = mock_ydl_instance
 
-        with patch("src.download_executor.utils.remove_sponsorblock_postprocessor"):
+        with patch("src.download_executor.remove_sponsorblock_postprocessor"):
             executor = DownloadExecutor()
             options = {
                 "qmeta": {"type": "audio", "site": "youtube"},

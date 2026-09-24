@@ -42,8 +42,8 @@ def _entry(**overrides) -> dict:
 
 def _run(vd, monkeypatch, tmp_path, entry, *, archived_ids=(), cache=None) -> dict:
     """Run the live filter for URL against a one-entry playlist; return its status row."""
-    monkeypatch.setattr("QYT.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
-    monkeypatch.setattr("utils.load_playlist_comments_for_source", lambda _source: {})
+    monkeypatch.setattr("src.qyt.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
+    monkeypatch.setattr(vd, "load_playlist_comments_for_source", lambda _source: {})
     archive = tmp_path / "archive.txt"
     archive.write_text("".join(f"youtube {v}\n" for v in archived_ids), encoding="utf-8")
     monkeypatch.setattr(vd, "fetch_latest_accessible_entry", lambda _url: ([entry], False, {}))
@@ -122,8 +122,8 @@ def test_filter_ignores_fresh_cache_entry_and_always_calls_fetch(vd, monkeypatch
     skip the ``fetch_latest_accessible_entry`` call - every check now goes to
     yt-dlp, matching the hourly-check UI promise.
     """
-    monkeypatch.setattr("QYT.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
-    monkeypatch.setattr("utils.load_playlist_comments_for_source", lambda _source: {})
+    monkeypatch.setattr("src.qyt.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
+    monkeypatch.setattr(vd, "load_playlist_comments_for_source", lambda _source: {})
     archive = tmp_path / "archive.txt"
     archive.write_text("", encoding="utf-8")
     entry = _entry()

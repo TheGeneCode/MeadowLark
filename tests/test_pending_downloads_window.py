@@ -400,7 +400,7 @@ def test_show_pending_downloads_recovers_when_cached_dialog_was_deleted_by_qt(
 
     with (
         patch.object(vd, "PendingDownloadsDialog", _FakeDialog),
-        patch.object(vd.utils, "log_exception") as mock_log,
+        patch.object(vd, "log_exception") as mock_log,
     ):
         win._show_pending_downloads()
 

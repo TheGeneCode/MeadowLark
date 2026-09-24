@@ -54,7 +54,7 @@ def import_vid_module():
             raise RuntimeError("unpatched DummyYDL invoked")
 
     fake.YoutubeDL = _Dummy
-    # also provide a minimal ``yt_dlp.utils`` namespace so imports in QYT.py succeed
+    # also provide a minimal ``yt_dlp.utils`` namespace so imports in src/qyt.py succeed
     utils_mod = types.ModuleType("yt_dlp.utils")
 
     class DownloadError(Exception):
@@ -80,7 +80,7 @@ def import_vid_module():
     sys.modules.pop("src.ydl_utils", None)
 
     path = str(Path(__file__).parent.parent / "meadowlark.pyw")
-    # Ensure the repo root is on sys.path so imports like `import QYT` succeed
+    # Ensure the repo root is on sys.path so `src.*` imports succeed
     repo_root = str(Path(path).parent)
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
@@ -337,7 +337,7 @@ def test_filter_audio_playlist_urls_skips_update(monkeypatch, tmp_path):
         _classify_episode_by_age = vd.MyWindow._classify_episode_by_age
 
     win = DummyWin()
-    with patch("QYT.HistoryLogger.log_skip"):
+    with patch("src.qyt.HistoryLogger.log_skip"):
         to_download, pending, had_error, messages, statuses = (
             vd.MyWindow._filter_audio_playlist_urls(
                 win,
@@ -392,7 +392,7 @@ def test_download_retries_without_sponsorblock(monkeypatch):
     monkeypatch.setattr(src.download_executor, "YoutubeDL", DummyYDL)
 
     download_queue = queue.Queue()
-    q = vd.QYT.QYTQueue(download_queue)
+    q = vd.qyt.QYTQueue(download_queue)
     q.download(
         ["http://example.com/video"],
         {

@@ -110,7 +110,7 @@ def test_dropped_playlist_range_on_audio_keeps_bare_audio_source(
     """'audio' has no rung to promote; it must keep its own (misc podcast) options."""
     options = window.get_options([_PLAYLIST_URL], "audio")
     assert options is not None
-    assert options["outtmpl"] == meadowlark.utils.get_source_options("audio")["outtmpl"]
+    assert options["outtmpl"] == meadowlark.get_source_options("audio")["outtmpl"]
 
 
 def test_cancelled_playlist_dialog_still_returns_none(
@@ -187,7 +187,7 @@ def test_archive_only_mode_enumerates_with_cookies_and_shared_wiring(
 
     monkeypatch.setattr(meadowlark, "extract_video_entries", _fake_entries)
     monkeypatch.setattr(meadowlark, "ARCHIVE_PATH", tmp_path / "archive.txt")
-    monkeypatch.setattr(meadowlark.QYT, "QLogger", lambda _q: SimpleNamespace(debug=print))
+    monkeypatch.setattr(meadowlark.qyt, "QLogger", lambda _q: SimpleNamespace(debug=print))
 
     window = _StubWindow()
     window.downloadQueue = None
@@ -211,7 +211,7 @@ def test_archive_only_mode_writes_a_video_shared_by_two_urls_once(
     monkeypatch.setattr(meadowlark, "ARCHIVE_PATH", tmp_path / "archive.txt")
     debug_lines: list[str] = []
     monkeypatch.setattr(
-        meadowlark.QYT, "QLogger", lambda _q: SimpleNamespace(debug=debug_lines.append)
+        meadowlark.qyt, "QLogger", lambda _q: SimpleNamespace(debug=debug_lines.append)
     )
     log_lines: list[str] = []
 
