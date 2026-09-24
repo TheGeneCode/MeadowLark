@@ -82,11 +82,6 @@ _NOT_DIRECTLY_IMPORTED: dict[str, str] = {
     # top-level `yt_dlp_plugins` namespace, and tests/test_pot_provider.py
     # imports getpot_bgutil_script from it directly, so the audit resolves it
     # normally. Do not re-add it here.
-    "pytest-cov": (
-        "pytest plugin, activated by the --cov flag rather than an import. "
-        "Note it sits in [project] dependencies rather than the dev group, so "
-        "it ships in the frozen build's dependency closure."
-    ),
 }
 
 

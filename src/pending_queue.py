@@ -4,6 +4,8 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
+from genekit.atomic_write import atomic_write_text
+
 from .logging_utils import get_local_timestamp, log_exception
 
 PendingRecord = dict
@@ -59,17 +61,12 @@ def load_pending_queue(path: Path) -> list[PendingRecord]:
 
 def save_pending_queue(path: Path, records: list[PendingRecord]) -> None:
     """Write pending records atomically; never raises on write failure."""
-    tmp_path = path.with_suffix(".tmp")
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path.write_text(
-            json.dumps(records, ensure_ascii=False, indent=1),
-            encoding="utf-8",
+        atomic_write_text(
+            path, json.dumps(records, ensure_ascii=False, indent=1), mkdir=True
         )
-        tmp_path.replace(path)
     except OSError as exc:
         log_exception(exc, f"save_pending_queue: could not write {path}")
-        tmp_path.unlink(missing_ok=True)
 
 
 def merge_pending(existing: PendingRecord, incoming: PendingRecord) -> PendingRecord:

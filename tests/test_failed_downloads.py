@@ -1,6 +1,7 @@
 """Tests for the failed-downloads store, record factory, and FailureHook."""
 
 import json
+import os
 from pathlib import Path
 from queue import Queue
 from unittest.mock import MagicMock, patch
@@ -278,10 +279,18 @@ def test_save_oserror_swallowed_and_tmp_cleaned(
     monkeypatch: pytest.MonkeyPatch,
     store: Path,
 ) -> None:
-    def boom(self: Path, *args: object, **kwargs: object) -> int:
+    """
+    Force a write-time failure inside genekit's atomic_write_text.
+
+    Patches ``os.fdopen`` -- not ``Path.write_text`` -- because save_failed_downloads
+    writes via genekit's atomic_write_text, which never calls Path.write_text; patching
+    that would let the write silently succeed instead of exercising the failure branch.
+    """
+
+    def boom(*args: object, **kwargs: object) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr(Path, "write_text", boom)
+    monkeypatch.setattr(os, "fdopen", boom)
 
     save_failed_downloads(store, [{"key": "u1"}])  # must not raise
 

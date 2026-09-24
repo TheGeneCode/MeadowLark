@@ -216,3 +216,22 @@ class TestDeleteFromArchiveMultiRow:
 
         assert not _is_row_blue(dialog, 0)  # video1 deleted
         assert _is_row_blue(dialog, 1)  # video2 untouched
+
+    def test_write_failure_warns_and_leaves_archive_state_untouched(self, tmp_path: Path) -> None:
+        archive_file = tmp_path / "archive.txt"
+        archive_file.write_text(f"youtube {_VIDEO_ID_1}\n", encoding="utf-8")
+
+        dialog = _make_dialog([_record(_YT_URL_1)], archive_ids={_VIDEO_ID_1})
+        assert _is_row_blue(dialog, 0)
+
+        with (
+            patch("src.history_dialog.ARCHIVE_PATH", archive_file),
+            patch("src.history_dialog.atomic_write_text", side_effect=OSError("disk full")),
+            patch("src.history_dialog.QMessageBox.warning") as mock_warning,
+        ):
+            dialog._delete_from_archive(_VIDEO_ID_1)
+
+        mock_warning.assert_called_once()
+        assert _VIDEO_ID_1 in dialog._archive_ids
+        assert _is_row_blue(dialog, 0)
+        assert archive_file.read_text(encoding="utf-8") == f"youtube {_VIDEO_ID_1}\n"

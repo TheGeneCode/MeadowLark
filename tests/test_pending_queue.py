@@ -1,6 +1,7 @@
 """Unit tests for src.pending_queue: persistent store for deferred downloads."""
 
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -188,6 +189,15 @@ def test_save_is_atomic_and_leaves_no_tmp(store: Path) -> None:
     assert not store.with_suffix(".tmp").exists()
 
 
+def test_save_creates_missing_parent_dir(tmp_path: Path) -> None:
+    nested = tmp_path / "nested" / "dir" / "pending.json"
+
+    save_pending_queue(nested, [make_pending_record("u", "youtube")])
+
+    assert nested.exists()
+    assert load_pending_queue(nested) == [make_pending_record("u", "youtube")]
+
+
 def test_unicode_title_round_trips(store: Path) -> None:
     title = "日本語字幕 🎬"
     record = make_pending_record("u", "youtube", title=title)
@@ -317,12 +327,19 @@ def test_save_pending_queue_oserror_on_write_leaves_no_tmp(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """
+    Force a write-time failure inside genekit's atomic_write_text.
+
+    Patches ``os.fdopen`` -- not ``Path.write_text`` -- because save_pending_queue
+    writes via genekit's atomic_write_text, which never calls Path.write_text; patching
+    that would let the write silently succeed instead of exercising the failure branch.
+    """
     store = tmp_path / "pending.json"
 
-    def boom(self: Path, *args: object, **kwargs: object) -> int:
+    def boom(*args: object, **kwargs: object) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr(Path, "write_text", boom)
+    monkeypatch.setattr(os, "fdopen", boom)
     save_pending_queue(store, [make_pending_record("u", "youtube")])
 
     assert not store.exists()

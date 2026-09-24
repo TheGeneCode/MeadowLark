@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from genekit.atomic_write import atomic_write_text
 from yt_dlp.extractor.youtube import YoutubePlaylistIE
 
 from .logging_utils import get_local_timestamp, log_exception
@@ -75,17 +76,12 @@ def load_failed_downloads(path: Path) -> list[FailedRecord]:
 
 def save_failed_downloads(path: Path, records: list[FailedRecord]) -> None:
     """Write failed-download records atomically; never raises on write failure."""
-    tmp_path = path.with_suffix(".tmp")
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path.write_text(
-            json.dumps(records, ensure_ascii=False, indent=1),
-            encoding="utf-8",
+        atomic_write_text(
+            path, json.dumps(records, ensure_ascii=False, indent=1), mkdir=True
         )
-        tmp_path.replace(path)
     except OSError as exc:
         log_exception(exc, f"save_failed_downloads: could not write {path}")
-        tmp_path.unlink(missing_ok=True)
 
 
 def add_failed_download(path: Path, record: FailedRecord) -> list[FailedRecord]:

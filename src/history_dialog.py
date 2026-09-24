@@ -2,6 +2,7 @@
 
 import webbrowser
 
+from genekit.atomic_write import atomic_write_text
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
@@ -214,17 +215,11 @@ class HistoryDialog(QDialog):
 
         new_lines = [ln for ln in lines if not _archive_line_matches(ln, video_id)]
 
-        # Atomic write: write to a sibling temp file then replace to avoid truncation
-        # on write failure.
-        tmp_path = ARCHIVE_PATH.with_suffix(".tmp")
         try:
-            with tmp_path.open("w", encoding="utf-8") as fh:
-                fh.writelines(new_lines)
-            tmp_path.replace(ARCHIVE_PATH)
+            atomic_write_text(ARCHIVE_PATH, "".join(new_lines))
         except OSError as exc:
             log_exception(exc, "HistoryDialog: write archive")
             QMessageBox.warning(self, "Archive Error", f"Could not update archive:\n{exc}")
-            tmp_path.unlink(missing_ok=True)
             return
 
         self._archive_ids.discard(video_id)

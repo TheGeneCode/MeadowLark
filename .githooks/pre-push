@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Block pushing lines that name a private repo or this machine's profile path (dev backlog #28).
+scanner="$HOME/.claude/scripts/check_public_history.py"
+if [ -f "$scanner" ]; then
+  C:/Python314/python.exe "$scanner" --pre-push || exit 1
+else
+  echo "pre-push: $scanner not found, public-history check skipped" >&2
+fi
+
 set -e
 echo "Running ruff check + format --check before push..."
 uv run ruff check

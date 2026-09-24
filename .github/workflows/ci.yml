@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -13,6 +16,7 @@ jobs:
   test:
     name: py${{ matrix.python-version }}
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       # A failure on the floor must not cancel the ceiling — the whole point of the
       # matrix is knowing WHICH interpreters broke.
@@ -24,7 +28,7 @@ jobs:
     env:
       # Selects the interpreter for every uv command in this job. Takes precedence over
       # .python-version, which stays 3.14 for local dev and the release build. Note that
-      # astral-sh/setup-uv@v3 has no `python-version` input, so this env var — not a
+      # astral-sh/setup-uv has no `python-version` input, so this env var — not a
       # `with:` key — is the mechanism.
       UV_PYTHON: ${{ matrix.python-version }}
       # Eight test modules build a QApplication at import time. windows-latest happens to
@@ -32,20 +36,12 @@ jobs:
       # of the runner image, not of the suite. Pin the headless platform explicitly.
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
           # Without a per-leg suffix all three legs share one cache key and thrash it.
           cache-suffix: py${{ matrix.python-version }}
-
-      # genekit is a private repo; uv shells out to git, which has no credentials
-      # of its own on the runner. Rewrite github.com HTTPS URLs to carry the PAT.
-      # Must run before any uv command that resolves dependencies.
-      - name: Authenticate git for private genekit dependency
-        env:
-          GENEKIT_TOKEN: ${{ secrets.GENEKIT_TOKEN }}
-        run: git config --global url."https://x-access-token:$env:GENEKIT_TOKEN@github.com/".insteadOf "https://github.com/"
 
       - name: Install the matrix interpreter
         run: uv python install ${{ matrix.python-version }}
@@ -66,23 +62,17 @@ jobs:
   lint:
     name: ruff
     runs-on: windows-latest
+    timeout-minutes: 10
     env:
       # Arbitrary: ruff reads target-version from requires-python, not from the interpreter
       # it runs on. Pinned only so this job does not drift with .python-version.
       UV_PYTHON: "3.14"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
           cache-suffix: lint
-
-      # --only-group dev does not install genekit, but keep the auth step so the job cannot
-      # break if the sync scope is ever widened.
-      - name: Authenticate git for private genekit dependency
-        env:
-          GENEKIT_TOKEN: ${{ secrets.GENEKIT_TOKEN }}
-        run: git config --global url."https://x-access-token:$env:GENEKIT_TOKEN@github.com/".insteadOf "https://github.com/"
 
       # --only-group dev installs ruff + pyinstaller and skips PyQt6 (~60 MB) and deno
       # (~44 MB): a few seconds instead of a full environment, which is what makes a

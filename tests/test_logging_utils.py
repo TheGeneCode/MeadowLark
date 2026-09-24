@@ -3,7 +3,11 @@
 import logging
 import re
 from datetime import datetime
+from pathlib import Path
 
+import pytest
+
+from src import logging_utils
 from src.logging_utils import get_local_timestamp, log_exception
 
 
@@ -44,10 +48,19 @@ class TestGetLocalTimestamp:
 class TestLogException:
     """Tests for log_exception() function."""
 
-    def test_log_exception_no_root_handlers_triggers_basicconfig(self) -> None:
+    def test_log_exception_no_root_handlers_triggers_basicconfig(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log_path = tmp_path / "error_log.txt"
+        monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", log_path)
         original_handlers = logging.root.handlers[:]
         logging.root.handlers.clear()
         try:
             log_exception(ValueError("test error"), "test context")
         finally:
+            # Close the file handler log_exception attached, or its open handle
+            # surfaces as an unraisable ResourceWarning at interpreter shutdown.
+            for handler in logging.root.handlers:
+                handler.close()
             logging.root.handlers = original_handlers
+        assert "test context: test error" in log_path.read_text(encoding="utf-8")
