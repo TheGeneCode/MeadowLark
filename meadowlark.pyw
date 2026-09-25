@@ -124,7 +124,7 @@ from src.history_dialog import HistoryDialog
 from src.logging_utils import log_exception
 from src.match_filter import build_match_filter
 from src.path_utils import resolve_playlist_label, sanitize_for_path, slugify_if_too_long
-from src.pending_check import PendingCheckDeps
+from src.pending_check import PendingCheckDeps, enqueue_entry
 from src.pending_check import check_pending_queue as run_pending_check
 from src.pending_downloads_dialog import PendingDownloadsDialog
 from src.pending_queue import (
@@ -138,6 +138,7 @@ from src.pending_queue import (
     save_pending_queue,
     upsert_pending,
 )
+from src.playlist_entry import playlist_entry_target
 from src.playlist_utils import (
     detect_site_from_urls,
     get_playlist_file_for_source,
@@ -1537,6 +1538,19 @@ class MyWindow(QWidget):
         """Drop parked downloads in one write and refresh the button and dialog."""
         self._refresh_pending_button(remove_pending_many(self.pending_queue_path, urls))
 
+    def _redownload(self, url: str, source: str, playlist_id: str | None) -> None:
+        """
+        Queue one item again, through its playlist URL when it is a video-playlist entry.
+
+        A bare watch URL under a <height>playlists source lands in NA/NA - <title> (BACKLOG #23).
+        """
+        if playlist_entry_target(url, source, playlist_id) is None:
+            self.request_detected([url], source)
+            return
+        enqueue_entry(
+            self._pending_deps(), url, source, playlist_id=playlist_id, recheck_live=True
+        )
+
     def _download_pending_now(self, records: list[dict]) -> None:
         """Force parked downloads through the normal pipeline, ignoring their release time."""
         runnable = [r for r in records if r.get("url")]
@@ -1556,7 +1570,9 @@ class MyWindow(QWidget):
             self.handle_log_entry(
                 f"Downloading pending item now: {record.get('title') or url}"
             )
-            self.request_detected([url], record.get("source") or fallback_source)
+            self._redownload(
+                url, record.get("source") or fallback_source, record.get("playlist_id")
+            )
 
     def _on_download_failed(self, record: dict) -> None:
         """Persist a failure reported by the download thread (GUI-thread slot)."""
@@ -1580,7 +1596,8 @@ class MyWindow(QWidget):
         exists, so match_filter never sees the video and the error is the only signal
         we get. The relative time parsed from that message is coarse; the immediate
         check_pending_queue() below replaces it with the exact release_timestamp (and
-        downloads straight away if the premiere already aired).
+        downloads straight away if the premiere already aired). The playlist id comes from the
+        failed record (see ``FailureHook.set_current_url``).
         """
         urls = record.get("urls") or []
         url = urls[0] if urls else record.get("key")
@@ -1593,6 +1610,7 @@ class MyWindow(QWidget):
                 make_pending_record(
                     url,
                     record.get("source") or "unknown",
+                    playlist_id=record.get("playlist_id"),
                     kind=KIND_PREMIERE,
                     title=record.get("title") or url,
                     release_at=to_release_at(parse_relative_release(error)),
@@ -1658,7 +1676,12 @@ class MyWindow(QWidget):
             self.handle_log_entry(
                 f"Retrying failed download: {record.get('title') or record['urls'][0]}"
             )
-            self.request_detected(list(record["urls"]), record["source"])
+            urls = list(record["urls"])
+            # A multi-URL record failed as a batch; only a single entry has one playlist to walk.
+            if len(urls) == 1:
+                self._redownload(urls[0], record["source"], record.get("playlist_id"))
+            else:
+                self.request_detected(urls, record["source"])
 
     def _mark_failed_downloaded(self, records: list[dict]) -> None:
         """

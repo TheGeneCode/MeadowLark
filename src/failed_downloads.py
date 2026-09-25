@@ -10,9 +10,10 @@ from genekit.atomic_write import atomic_write_text
 from yt_dlp.extractor.youtube import YoutubePlaylistIE
 
 from .logging_utils import get_local_timestamp, log_exception
+from .playlist_entry import YOUTUBE_PLAYLIST_URL, playlist_id_of
 from .url_utils import extract_video_id
 
-FailedRecord = dict  # keys: key, urls, source, site, title, failed_at, error
+FailedRecord = dict  # keys: key, urls, source, site, title, failed_at, error[, playlist_id]
 
 _MAX_ERROR_LEN = 500
 
@@ -28,7 +29,6 @@ _ENTRY_ERROR_RE = re.compile(
     re.DOTALL,
 )
 _YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v={}"
-_YOUTUBE_PLAYLIST_URL = "https://www.youtube.com/playlist?list={}"
 _UNKNOWN_TITLE = "(unknown title)"
 
 
@@ -56,7 +56,7 @@ def _entry_url(ie: str, vid: str) -> str:
     if ie == "youtube":
         return _YOUTUBE_WATCH_URL.format(vid)
     if ie.startswith("youtube:") and YoutubePlaylistIE.suitable(vid):
-        return _YOUTUBE_PLAYLIST_URL.format(vid)
+        return YOUTUBE_PLAYLIST_URL.format(vid)
     return vid
 
 
@@ -151,10 +151,16 @@ def make_failed_record(
     meta: dict | None,
     title: str,
     error: str,
+    playlist_id: str | None = None,
 ) -> FailedRecord:
-    """Normalize a failure into a display-ready record for the store."""
+    """
+    Normalize a failure into a display-ready record for the store.
+
+    ``playlist_id`` is written only when known, so pre-#23 stores and records
+    stay byte-identical; the key is absent, never None.
+    """
     meta = meta or {}
-    return {
+    record: FailedRecord = {
         "key": urls[0] if urls else title,
         "urls": list(urls),
         "source": meta.get("type") or meta.get("source") or "unknown",
@@ -163,6 +169,9 @@ def make_failed_record(
         "failed_at": get_local_timestamp(),
         "error": error[:_MAX_ERROR_LEN],
     }
+    if playlist_id:
+        record["playlist_id"] = playlist_id
+    return record
 
 
 def progress_item_key(info: dict) -> str:
@@ -196,9 +205,20 @@ class FailureHook:
         self.meta = meta or {}
         self.on_failure = on_failure
         self._buffered: dict[str, FailedRecord] = {}
+        self._current_playlist_id: str | None = None
 
     def _vid_id(self, info: dict) -> str:
         return progress_item_key(info)
+
+    def set_current_url(self, url: object) -> None:
+        """
+        Note the top-level URL yt-dlp is about to walk.
+
+        One run can walk several playlists, and an extraction failure's ERROR line names only
+        the video, so this is the only way to know which playlist a log-only failure came from.
+        Never raises: it runs inside the download loop.
+        """
+        self._current_playlist_id = playlist_id_of(url)
 
     def __call__(self, d: dict) -> None:
         """Buffer an error event, or discard a buffered failure once the item finishes."""
@@ -215,6 +235,7 @@ class FailureHook:
                     error=str(
                         d.get("error") or d.get("fragment_error") or "download error",
                     ),
+                    playlist_id=info.get("playlist_id") or self._current_playlist_id,
                 )
             elif status == "finished":
                 self._buffered.pop(vid, None)
@@ -252,6 +273,7 @@ class FailureHook:
             meta=self.meta,
             title=_untitled(vid),
             error=match.group("reason").strip(),
+            playlist_id=self._current_playlist_id,
         )
 
     def flush(self) -> None:

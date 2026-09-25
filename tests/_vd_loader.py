@@ -31,6 +31,9 @@ def _restore_module(name: str, mod: types.ModuleType | None) -> None:
 
 
 def import_vid_module():
+    # src.playlist_entry needs the real yt_dlp.extractor tree, which the fake below lacks;
+    # cache it under the real package so meadowlark.pyw's import of it reuses that.
+    importlib.import_module("src.playlist_entry")
     fake = types.ModuleType("yt_dlp")
 
     class _Dummy:

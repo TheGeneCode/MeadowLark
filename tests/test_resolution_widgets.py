@@ -47,6 +47,7 @@ def _make_window(vd, tmp_path: Path):
         _apply_always_on_top = vd.MyWindow._apply_always_on_top
         _restart_podcast_timer = vd.MyWindow._restart_podcast_timer
         _download_pending_now = vd.MyWindow._download_pending_now
+        _redownload = vd.MyWindow._redownload
         _remove_pending_downloads = vd.MyWindow._remove_pending_downloads
         _refresh_pending_button = vd.MyWindow._refresh_pending_button
 

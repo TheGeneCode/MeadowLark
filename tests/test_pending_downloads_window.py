@@ -70,6 +70,7 @@ def _make_win(vd, pending_path: Path):
         _on_pending_dialog_destroyed = vd.MyWindow._on_pending_dialog_destroyed
         _remove_pending_downloads = vd.MyWindow._remove_pending_downloads
         _download_pending_now = vd.MyWindow._download_pending_now
+        _redownload = vd.MyWindow._redownload
 
         def handle_log_entry(self, msg: str) -> None:
             self.logs.append(msg)
@@ -259,6 +260,28 @@ def test_download_pending_now_removes_then_requests_with_record_source(
     assert load_pending_queue(path) == []  # removed before the request
     assert win.requested == [(["https://example.com/vid"], "1080playlists")]
     assert any("Downloading pending item now" in msg for msg in win.logs)
+
+
+def test_download_pending_now_playlist_entry_uses_enqueue_entry(
+    tmp_path: Path, monkeypatch
+) -> None:
+    vd = import_vid_module()
+    pl = "PL" + "a" * 32
+    watch = "https://www.youtube.com/watch?v=RUh8D2Hau2o"
+    path = tmp_path / "pending_queue.json"
+    record = _pending_record(url=watch, source="720playlists", playlist_id=pl)
+    save_pending_queue(path, [record])
+    win = _make_win(vd, path)
+    win._pending_deps = lambda: "deps"
+    enqueue = Mock()
+    monkeypatch.setattr(vd, "enqueue_entry", enqueue)
+
+    win._download_pending_now([record])
+
+    enqueue.assert_called_once_with(
+        "deps", watch, "720playlists", playlist_id=pl, recheck_live=True
+    )
+    assert win.requested == []
 
 
 def test_download_pending_now_falls_back_to_1080_when_source_missing(

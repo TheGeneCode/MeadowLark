@@ -16,6 +16,10 @@ from .ydl_utils import extract_playlist_info
 
 YoutubeDL = yt_dlp.YoutubeDL
 
+# Private options key (yt-dlp ignores unknown params, as with the _tried_* flags): a
+# Callable[[str], None] called with each top-level URL just before yt-dlp walks it.
+ON_URL_START_KEY = "_on_url_start"
+
 
 class DownloadExecutor:
     """
@@ -52,9 +56,25 @@ class DownloadExecutor:
         fetch of the solver on each download, turning a transient upstream blip
         (e.g. HTTP 504) into a hard "Requested format is not available" failure.
         yt-dlp keys its cache by player URL/version and self-invalidates.
+
+        When ``opts[ON_URL_START_KEY]`` holds a listener, the URLs are walked one
+        at a time on the same ``YoutubeDL`` and the listener is called with each
+        URL first; a listener failure is logged and never aborts the download.
+        Without a listener this is the single ``ydl.download(urls)`` call.
         """
+        on_url_start = opts.get(ON_URL_START_KEY)
         with YoutubeDL(opts) as ydl:
-            ydl.download(urls)
+            if on_url_start is None:
+                ydl.download(urls)
+                return
+            # YoutubeDL.download(list) is this same loop plus a SameFileError guard that only
+            # fires for an output template without "%"; every template here has one.
+            for url in urls:
+                try:
+                    on_url_start(url)
+                except (AttributeError, TypeError, ValueError) as exc:
+                    log_exception(exc, "DownloadExecutor: URL-start listener failed")
+                ydl.download([url])
 
     def _extract_title(self, urls: list, options: dict | None = None) -> str:
         """

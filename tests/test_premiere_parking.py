@@ -106,6 +106,24 @@ def test_park_not_yet_released_creates_premiere_record_with_parsed_release_at(
     assert any("parked" in msg for msg in win.logs)
 
 
+def test_park_not_yet_released_carries_playlist_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vd = import_vid_module()
+    path = tmp_path / "pending_queue.json"
+    win = _make_win(vd, path, monkeypatch)
+    playlist_id = "PL" + "a" * 32
+
+    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+        ydl_instance = mock_ydl.return_value.__enter__.return_value
+        ydl_instance.extract_info.return_value = {"live_status": "is_upcoming"}
+        win._park_not_yet_released(
+            {**_not_yet_released_failed_record(), "playlist_id": playlist_id}
+        )
+
+    assert load_pending_queue(path)[0]["playlist_id"] == playlist_id
+
+
 def test_park_not_yet_released_no_url_and_no_key_is_noop(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

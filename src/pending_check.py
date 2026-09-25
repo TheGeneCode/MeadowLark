@@ -16,6 +16,7 @@ from .pending_queue import (
     load_pending_queue,
     save_pending_queue,
 )
+from .playlist_entry import playlist_entry_target, restrict_to_entry
 from .release_status import release_at_from_timestamp
 from .ydl_options import build_podcast_outtmpl
 from .ydl_utils import extract_release_info
@@ -78,32 +79,70 @@ def _refresh(record: PendingRecord, info: dict) -> PendingRecord:
     return refreshed
 
 
-def _enqueue_record(deps: PendingCheckDeps, record: PendingRecord) -> bool:
-    """Build options for a now-available record and put it on the download queue."""
-    url = record["url"]
-    source = record["source"]
+def enqueue_entry(
+    deps: PendingCheckDeps,
+    url: str,
+    source: str,
+    *,
+    playlist_id: str | None = None,
+    label: str | None = None,
+    recheck_live: bool = False,
+) -> bool:
+    """
+    Build options for one item and put it on the download queue.
+
+    A video-playlist entry with a known playlist is downloaded through its playlist URL,
+    restricted to its own id, so yt-dlp fills %(playlist)s / %(playlist_index)s (BACKLOG #23).
+
+    Args:
+        recheck_live: Keep the live/upcoming match_filter (Retry, Download now). The pending
+            loop leaves it False because its probe just confirmed availability.
+
+    Returns:
+        False when get_options declined (archive-only mode, empty URL, cancelled).
+    """
+    # Options come from the watch URL even when the playlist is what gets walked:
+    # archive-only mode archives every entry of the URL get_options is handed.
     properties = deps.get_options([url], source)
     if not properties:
         return False
     qhook, qlogger, ydl_opts = deps.create_context()
-    # Don't re-apply match_filter: availability was just confirmed by the probe.
-    properties.pop("match_filter", None)
+    live_filter = properties.pop("match_filter", None)
     ydl_opts = deps.append_properties(ydl_opts, properties) or ydl_opts
     if source == "audio_playlists":
         # get_options rebuilds the flat misc-directory template; the show folder this
         # episode was bound for survives only as the parked label.
-        ydl_opts["outtmpl"] = build_podcast_outtmpl(record.get("label"))
+        ydl_opts["outtmpl"] = build_podcast_outtmpl(label)
+    target = playlist_entry_target(url, source, playlist_id)
+    kept_filter = live_filter if recheck_live else None
+    if target is not None:
+        ydl_opts["match_filter"] = restrict_to_entry(target.video_id, kept_filter)
+    elif kept_filter is not None:
+        ydl_opts["match_filter"] = kept_filter
     qmeta: dict = {"site": deps.detect_site([url]), "type": source}
-    if (playlist_id := record.get("playlist_id")) and (
+    # The NA-folder rescue is only for a bare watch URL; a retargeted run makes no NA/ folder,
+    # and the rescue would rename any stale one it found.
+    if target is None and playlist_id and (
         playlist_comments := deps.load_playlist_comments(source)
     ):
         qmeta["playlist_comments"] = playlist_comments
         qmeta["playlist_id"] = playlist_id
     ydl_opts["qmeta"] = qmeta
-    deps.enqueue([url], ydl_opts)
+    deps.enqueue([target.playlist_url if target else url], ydl_opts)
     deps.wire_signals(qhook, qlogger)
     deps.set_progress_range(0, 1)
     return True
+
+
+def _enqueue_record(deps: PendingCheckDeps, record: PendingRecord) -> bool:
+    """Queue a now-available parked record (availability was just confirmed by the probe)."""
+    return enqueue_entry(
+        deps,
+        record["url"],
+        record["source"],
+        playlist_id=record.get("playlist_id"),
+        label=record.get("label"),
+    )
 
 
 def check_pending_queue(deps: PendingCheckDeps) -> list[PendingRecord]:

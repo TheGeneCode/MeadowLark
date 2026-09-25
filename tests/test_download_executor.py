@@ -3,9 +3,10 @@
 import subprocess
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
 from yt_dlp.utils import DownloadError, ExtractorError
 
-from src.download_executor import DownloadExecutor
+from src.download_executor import ON_URL_START_KEY, DownloadExecutor
 
 
 class TestDownloadExecutorInitialization:
@@ -847,3 +848,81 @@ class TestExecuteForwardsCookiefileOnError:
 
         _, kwargs = mock_extract.call_args
         assert kwargs.get("extra_opts") is None
+
+
+class TestRunDownloadUrlListener:
+    """_run_download announces each top-level URL when a listener is installed."""
+
+    @patch("src.download_executor.YoutubeDL")
+    def test_run_download_without_listener_passes_whole_list(self, mock_ydl_class: Mock) -> None:
+        ydl = mock_ydl_class.return_value.__enter__.return_value
+
+        DownloadExecutor()._run_download({}, ["a", "b"])
+
+        ydl.download.assert_called_once_with(["a", "b"])
+
+    @patch("src.download_executor.YoutubeDL")
+    def test_run_download_announces_each_url_before_its_download(
+        self, mock_ydl_class: Mock
+    ) -> None:
+        events: list[tuple] = []
+        ydl = mock_ydl_class.return_value.__enter__.return_value
+        ydl.download.side_effect = lambda urls: events.append(("dl", urls))
+        opts = {ON_URL_START_KEY: lambda url: events.append(("start", url))}
+
+        DownloadExecutor()._run_download(opts, ["a", "b"])
+
+        assert events == [("start", "a"), ("dl", ["a"]), ("start", "b"), ("dl", ["b"])]
+
+    @patch("src.download_executor.YoutubeDL")
+    def test_run_download_listener_error_does_not_stop_download(self, mock_ydl_class: Mock) -> None:
+        ydl = mock_ydl_class.return_value.__enter__.return_value
+        listener = Mock(side_effect=TypeError("boom"))
+
+        DownloadExecutor()._run_download({ON_URL_START_KEY: listener}, ["a", "b"])
+
+        assert [c.args[0] for c in ydl.download.call_args_list] == [["a"], ["b"]]
+
+    @patch("src.download_executor.YoutubeDL")
+    def test_run_download_download_error_stops_remaining_urls(self, mock_ydl_class: Mock) -> None:
+        """Without ignoreerrors the first raise propagates, exactly as ydl.download(list) did."""
+        ydl = mock_ydl_class.return_value.__enter__.return_value
+        ydl.download.side_effect = DownloadError("fail")
+        listener = Mock()
+
+        with pytest.raises(DownloadError):
+            DownloadExecutor()._run_download({ON_URL_START_KEY: listener}, ["a", "b"])
+
+        listener.assert_called_once_with("a")
+
+    @patch("src.download_executor.get_setting", new=Mock(return_value="mp4"))
+    def test_rung_fallback_keeps_listener(self) -> None:
+        def listener(_url: str) -> None:
+            return None
+
+        result = DownloadExecutor._rung_options_modifier(720)(
+            {ON_URL_START_KEY: listener, "qmeta": {}}
+        )
+
+        assert result[ON_URL_START_KEY] is listener
+
+    @patch.object(DownloadExecutor, "_extract_title", new=Mock(return_value="T"))
+    @patch("src.download_executor.YoutubeDL")
+    def test_execute_sponsorblock_fallback_announces_url_again(self, mock_ydl_class: Mock) -> None:
+        """The real SponsorBlock modifier keeps the listener, so the retry re-tags the URL."""
+        ydl = mock_ydl_class.return_value.__enter__.return_value
+        sb_error = DownloadError("Unable to communicate with SponsorBlock API")
+        ydl.download.side_effect = [sb_error, None]
+        listener = Mock()
+        options = {
+            ON_URL_START_KEY: listener,
+            "qmeta": {"type": "audio", "site": "youtube"},
+            "postprocessors": [{"key": "SponsorBlock"}],
+        }
+
+        success, _ = DownloadExecutor().execute(["a"], options)
+
+        assert success is True
+        assert listener.call_args_list == [(("a",),), (("a",),)]
+        retry_opts = mock_ydl_class.call_args_list[1].args[0]
+        assert retry_opts[ON_URL_START_KEY] is listener

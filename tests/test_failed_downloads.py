@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PyQt6.QtWidgets import QApplication
 
+from src.download_executor import ON_URL_START_KEY
 from src.failed_downloads import (
     ErrorCapturingLogger,
     FailureHook,
@@ -913,3 +914,97 @@ def test_logger_is_restored_even_when_execute_raises(
         queue_obj.download(["u"], options)
 
     assert options["logger"] is inner_logger
+
+
+# --- Playlist id capture (BACKLOG #23) ---
+
+_PL = "PL" + "a" * 32
+_PL_B = "PL" + "b" * 32
+
+
+def _playlist_url(playlist_id: str) -> str:
+    return f"https://www.youtube.com/playlist?list={playlist_id}"
+
+
+@pytest.mark.parametrize("playlist_id", [None, ""])
+def test_make_failed_record_omits_unknown_playlist_id(playlist_id: str | None) -> None:
+    record = make_failed_record(["u"], _META, "t", "e", playlist_id=playlist_id)
+
+    assert "playlist_id" not in record
+
+
+def test_make_failed_record_keeps_playlist_id() -> None:
+    record = make_failed_record(["u"], _META, "t", "e", playlist_id=_PL)
+
+    assert record["playlist_id"] == _PL
+
+
+def test_log_error_tagged_with_current_playlist() -> None:
+    hook, captured = _hook_with_capture()
+    hook.set_current_url(_playlist_url(_PL))
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook.flush()
+
+    assert captured[0]["playlist_id"] == _PL
+
+
+def test_log_error_follows_url_switch() -> None:
+    hook, captured = _hook_with_capture()
+    hook.set_current_url(_playlist_url(_PL))
+    hook.record_log_error("ERROR: [youtube] vid1: Video unavailable")
+    hook.set_current_url(_playlist_url(_PL_B))
+    hook.record_log_error("ERROR: [youtube] vid2: Video unavailable")
+    hook.flush()
+
+    by_url = {r["urls"][0]: r["playlist_id"] for r in captured}
+    assert by_url == {
+        "https://www.youtube.com/watch?v=vid1": _PL,
+        "https://www.youtube.com/watch?v=vid2": _PL_B,
+    }
+
+
+def test_log_error_without_current_url_has_no_playlist_id() -> None:
+    hook, captured = _hook_with_capture()
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook.flush()
+
+    assert "playlist_id" not in captured[0]
+
+
+def test_set_current_url_with_non_playlist_clears_previous() -> None:
+    hook, captured = _hook_with_capture()
+    hook.set_current_url(_playlist_url(_PL))
+    hook.set_current_url("https://www.youtube.com/watch?v=abc")
+    hook.record_log_error(_UNAVAILABLE_LINE)
+    hook.flush()
+
+    assert "playlist_id" not in captured[0]
+
+
+def test_progress_error_prefers_info_playlist_id() -> None:
+    hook, captured = _hook_with_capture()
+    hook.set_current_url(_playlist_url(_PL_B))
+    hook({"status": "error", "info_dict": {"id": "v1", "playlist_id": "PLinfo"}})
+    hook.flush()
+
+    assert captured[0]["playlist_id"] == "PLinfo"
+
+
+def test_qytqueue_download_installs_url_listener(monkeypatch: pytest.MonkeyPatch) -> None:
+    queue_obj = QYTQueue(Queue())
+
+    def _execute(_urls: list, opts: dict) -> tuple[bool, str]:
+        opts[ON_URL_START_KEY](_playlist_url(_PL))
+        opts["logger"].error(_UNAVAILABLE_LINE)
+        return True, ""
+
+    monkeypatch.setattr(queue_obj.executor, "execute", _execute)
+    monkeypatch.setattr(queue_obj.executor, "_extract_title", lambda _u: "T")
+    captured: list[dict] = []
+    queue_obj.download_failed.connect(captured.append)
+    options = {"qmeta": _META, "logger": MagicMock(), "ignoreerrors": "only_download"}
+
+    queue_obj.download(["u"], options)
+
+    assert len(captured) == 1
+    assert captured[0]["playlist_id"] == _PL

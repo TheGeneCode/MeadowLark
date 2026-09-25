@@ -26,7 +26,7 @@ from src.config import (  # noqa: E402
     HISTORY_LOG_PATH,
     LOGFILE_MIGRATION_ENABLED,
 )
-from src.download_executor import DownloadExecutor  # noqa: E402
+from src.download_executor import ON_URL_START_KEY, DownloadExecutor  # noqa: E402
 from src.failed_downloads import (  # noqa: E402
     ErrorCapturingLogger,
     FailureHook,
@@ -553,6 +553,9 @@ class QYTQueue(QThread):
             failure_hook = FailureHook(options.get("qmeta"), on_failure=self.download_failed.emit)
             progress_hooks.append(failure_hook)
             options["progress_hooks"] = progress_hooks
+            # Names the playlist being walked, so an entry failure records its playlist_id and can
+            # later be re-downloaded into the playlist folder instead of NA/ (BACKLOG #23).
+            options[ON_URL_START_KEY] = failure_hook.set_current_url
 
             # An entry that dies during *extraction* (unavailable, private,
             # removed) never reaches the progress hooks, so under

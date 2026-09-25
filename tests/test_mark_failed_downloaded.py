@@ -134,7 +134,7 @@ def test_mark_batch_skips_ineligible_records(tmp_path: Path) -> None:
 
 
 def test_retry_batch_deletes_once_then_requeues_each() -> None:
-    win = _make_window("_retry_failed_downloads")
+    win = _make_window("_retry_failed_downloads", "_redownload")
     record_a = _record(key="a", urls=["https://www.youtube.com/watch?v=a1"], source="1080")
     record_b = _record(key="b", urls=["https://www.youtube.com/watch?v=b1"], source="audio")
 

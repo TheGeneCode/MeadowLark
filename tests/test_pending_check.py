@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 from yt_dlp.utils import DownloadError
 
-from src.pending_check import PendingCheckDeps, check_pending_queue
+from src.pending_check import PendingCheckDeps, check_pending_queue, enqueue_entry
 from src.pending_queue import (
     KIND_LIVE,
     KIND_PREMIERE,
@@ -653,3 +653,120 @@ def test_store_is_rewritten_with_survivors_only(tmp_path: Path) -> None:
         "https://yt.com/watch?v=parked",
         "https://yt.com/watch?v=erroring",
     }
+
+
+_PL = "PL" + "a" * 32
+_VID = "RUh8D2Hau2o"
+_WATCH = f"https://www.youtube.com/watch?v={_VID}"
+_PL_URL = f"https://www.youtube.com/playlist?list={_PL}"
+
+
+def _run_one(tmp_path: Path, record: dict, **overrides: object) -> tuple[list[str], dict]:
+    path = tmp_path / "pending_queue.json"
+    seed(path, record)
+    enqueue = Mock()
+    deps = make_deps(
+        tmp_path,
+        path=path,
+        enqueue=enqueue,
+        ydl_class=make_ydl_class(const({"live_status": "was_live"})),
+        **overrides,
+    )
+    check_pending_queue(deps)
+    urls, opts = enqueue.call_args[0]
+    return urls, opts
+
+
+def test_playlist_entry_record_enqueues_playlist_url_with_id_filter(tmp_path: Path) -> None:
+    """The BACKLOG #23 regression: a watch URL must not render NA/NA."""
+    record = make_pending_record(_WATCH, "720playlists", playlist_id=_PL)
+
+    urls, opts = _run_one(
+        tmp_path, record, load_playlist_comments=Mock(return_value={_PL: "Show"})
+    )
+
+    assert urls == [_PL_URL]
+    assert isinstance(opts["match_filter"]({"id": "x"}, incomplete=True), str)
+    assert opts["match_filter"]({"id": _VID}, incomplete=True) is None
+    assert "playlist_comments" not in opts["qmeta"]
+
+
+def test_playlist_entry_options_built_from_watch_url(tmp_path: Path) -> None:
+    get_options = Mock(return_value={"format": "x"})
+    record = make_pending_record(_WATCH, "720playlists", playlist_id=_PL)
+
+    _run_one(tmp_path, record, get_options=get_options)
+
+    get_options.assert_called_once_with([_WATCH], "720playlists")
+
+
+def test_record_without_playlist_id_keeps_watch_url(tmp_path: Path) -> None:
+    urls, opts = _run_one(tmp_path, make_pending_record(_WATCH, "720playlists"))
+
+    assert urls == [_WATCH]
+    assert "match_filter" not in opts
+
+
+def test_audio_playlist_record_is_not_retargeted(tmp_path: Path) -> None:
+    from src.ydl_options import build_podcast_outtmpl
+
+    record = make_pending_record(_WATCH, "audio_playlists", playlist_id=_PL, label="Show")
+
+    urls, opts = _run_one(tmp_path, record)
+
+    assert urls == [_WATCH]
+    assert opts["outtmpl"] == build_podcast_outtmpl("Show")
+    assert "match_filter" not in opts
+
+
+def test_enqueue_entry_recheck_live_wraps_live_filter(tmp_path: Path) -> None:
+    inner = Mock(return_value="live")
+    enqueue = Mock()
+    deps = make_deps(
+        tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner}
+    )
+
+    assert enqueue_entry(deps, _WATCH, "720playlists", playlist_id=_PL, recheck_live=True)
+
+    _urls, opts = enqueue.call_args[0]
+    assert opts["match_filter"]({"id": _VID}, incomplete=True) == "live"
+    inner.reset_mock()
+    assert isinstance(opts["match_filter"]({"id": "other"}, incomplete=True), str)
+    inner.assert_not_called()
+
+
+def test_enqueue_entry_without_recheck_live_drops_live_filter_for_target(tmp_path: Path) -> None:
+    inner = Mock(return_value="live")
+    enqueue = Mock()
+    deps = make_deps(
+        tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner}
+    )
+
+    assert enqueue_entry(deps, _WATCH, "720playlists", playlist_id=_PL)
+
+    urls, opts = enqueue.call_args[0]
+    assert urls == [_PL_URL]
+    assert opts["match_filter"]({"id": _VID}, incomplete=True) is None
+    inner.assert_not_called()
+
+
+def test_enqueue_entry_archive_only_declined_enqueues_nothing(tmp_path: Path) -> None:
+    enqueue = Mock()
+    deps = make_deps(tmp_path, enqueue=enqueue, get_options=lambda _u, _s: None)
+
+    assert enqueue_entry(deps, _WATCH, "720playlists", playlist_id=_PL, recheck_live=True) is False
+
+    enqueue.assert_not_called()
+
+
+def test_enqueue_entry_recheck_live_keeps_filter_without_target(tmp_path: Path) -> None:
+    inner = Mock(return_value="live")
+    enqueue = Mock()
+    deps = make_deps(
+        tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner}
+    )
+
+    assert enqueue_entry(deps, _WATCH, "720playlists", recheck_live=True)
+
+    _urls, opts = enqueue.call_args[0]
+    assert opts["match_filter"] is inner
