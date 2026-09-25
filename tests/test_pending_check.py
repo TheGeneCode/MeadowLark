@@ -681,9 +681,7 @@ def test_playlist_entry_record_enqueues_playlist_url_with_id_filter(tmp_path: Pa
     """The BACKLOG #23 regression: a watch URL must not render NA/NA."""
     record = make_pending_record(_WATCH, "720playlists", playlist_id=_PL)
 
-    urls, opts = _run_one(
-        tmp_path, record, load_playlist_comments=Mock(return_value={_PL: "Show"})
-    )
+    urls, opts = _run_one(tmp_path, record, load_playlist_comments=Mock(return_value={_PL: "Show"}))
 
     assert urls == [_PL_URL]
     assert isinstance(opts["match_filter"]({"id": "x"}, incomplete=True), str)
@@ -722,9 +720,7 @@ def test_audio_playlist_record_is_not_retargeted(tmp_path: Path) -> None:
 def test_enqueue_entry_recheck_live_wraps_live_filter(tmp_path: Path) -> None:
     inner = Mock(return_value="live")
     enqueue = Mock()
-    deps = make_deps(
-        tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner}
-    )
+    deps = make_deps(tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner})
 
     assert enqueue_entry(deps, _WATCH, "720playlists", playlist_id=_PL, recheck_live=True)
 
@@ -738,9 +734,7 @@ def test_enqueue_entry_recheck_live_wraps_live_filter(tmp_path: Path) -> None:
 def test_enqueue_entry_without_recheck_live_drops_live_filter_for_target(tmp_path: Path) -> None:
     inner = Mock(return_value="live")
     enqueue = Mock()
-    deps = make_deps(
-        tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner}
-    )
+    deps = make_deps(tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner})
 
     assert enqueue_entry(deps, _WATCH, "720playlists", playlist_id=_PL)
 
@@ -762,9 +756,7 @@ def test_enqueue_entry_archive_only_declined_enqueues_nothing(tmp_path: Path) ->
 def test_enqueue_entry_recheck_live_keeps_filter_without_target(tmp_path: Path) -> None:
     inner = Mock(return_value="live")
     enqueue = Mock()
-    deps = make_deps(
-        tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner}
-    )
+    deps = make_deps(tmp_path, enqueue=enqueue, get_options=lambda _u, _s: {"match_filter": inner})
 
     assert enqueue_entry(deps, _WATCH, "720playlists", recheck_live=True)
 

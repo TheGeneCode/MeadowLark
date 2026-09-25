@@ -122,8 +122,10 @@ def enqueue_entry(
     qmeta: dict = {"site": deps.detect_site([url]), "type": source}
     # The NA-folder rescue is only for a bare watch URL; a retargeted run makes no NA/ folder,
     # and the rescue would rename any stale one it found.
-    if target is None and playlist_id and (
-        playlist_comments := deps.load_playlist_comments(source)
+    if (
+        target is None
+        and playlist_id
+        and (playlist_comments := deps.load_playlist_comments(source))
     ):
         qmeta["playlist_comments"] = playlist_comments
         qmeta["playlist_id"] = playlist_id
