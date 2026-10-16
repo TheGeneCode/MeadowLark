@@ -24,6 +24,7 @@ A simple desktop app for downloading videos, playlists, and podcasts from YouTub
   - [Downloading a Single Video or Audio File](#downloading-a-single-video-or-audio-file)
   - [Downloading a Playlist](#downloading-a-playlist)
   - [Downloading Podcasts](#downloading-podcasts)
+  - [Naming Folders and Categories](#naming-folders-and-categories)
   - [Live Videos](#live-videos)
 - [Settings Reference](#settings-reference)
   - [Resolutions Tab](#resolutions-tab)
@@ -108,7 +109,7 @@ MeadowLark can batch-download entire YouTube playlists. It tracks which videos i
 
 **Set up a playlist file:**
 
-1. Open Notepad and add one YouTube playlist URL per line. Lines starting with `#` are treated as comments and skipped.
+1. Open Notepad and add one YouTube playlist per line — a full playlist URL or just the playlist ID (the part after `list=`). A line starting with `#` is a **name** for the playlists below it — see [Naming Folders and Categories](#naming-folders-and-categories).
 
    ```
    # My tech videos
@@ -131,9 +132,51 @@ MeadowLark can batch-download entire YouTube playlists. It tracks which videos i
 
 Podcast mode works just like the playlist downloader but saves audio files and filters out anything shorter than 3 minutes (so shorts and trailers are skipped automatically).
 
-1. Add YouTube channel or podcast playlist URLs to your audio playlist file (see above).
+1. Add YouTube channel or podcast playlist URLs to your audio playlist file (see above; see [Naming Folders and Categories](#naming-folders-and-categories) to group shows into folders).
 2. Enable **Automation → Auto-check podcasts** if you want the app to check for new episodes on a schedule without you clicking anything.
 3. New episodes land in your **Audio directory** (default: `Music\Podcasts`).
+
+### Naming Folders and Categories
+
+In any playlist file, a line that starts with `#` is a **name**. It applies to **every playlist below it, up to the next `#` line**.
+
+In the **audio (podcast) playlist file**, that name is the folder the episodes are saved in (`<Audio directory>\<name>\`). So you can organise your podcasts two ways — and mix them in one file:
+
+**One folder per show** — put a `#name` above every link:
+
+```
+#Pod Save America
+https://www.youtube.com/playlist?list=PLaaaaaaaaaaaaaaaa
+#Freakonomics
+https://www.youtube.com/playlist?list=PLbbbbbbbbbbbbbbbb
+```
+
+Result: `Podcasts\Pod Save America\…` and `Podcasts\Freakonomics\…`
+
+**Categories** — put several links under one `#name` and they share a folder:
+
+```
+#Tech News
+https://www.youtube.com/playlist?list=PLcccccccccccccccc
+https://www.youtube.com/playlist?list=PLdddddddddddddddd
+#Politics
+https://www.youtube.com/playlist?list=PLeeeeeeeeeeeeeeee
+PLffffffffffffffff
+```
+
+Result: both tech shows' episodes in `Podcasts\Tech News\`, both politics shows' in `Podcasts\Politics\`.
+
+| You write | What happens |
+|---|---|
+| A link with no `#name` above it | Saved in a folder named after the playlist's YouTube title. |
+| A line with just `#` | Ends the current category — links below it go back to their YouTube title. |
+| `#` in front of a link (`#https://…` or `#PLxxxx…`) | Pauses that playlist. It is skipped but does **not** end the category, so links below it stay in the same folder. |
+| Blank lines | Ignored — they do not end a category. |
+| Two `#name` lines in a row | The lower one wins. |
+
+> **Tip:** if you pause a show that had its own `#name`, that name still applies to any un-named link further down. Give the next link its own `#name`, or add a lone `#` line.
+
+**Video playlist files** (`playlists.txt`, `720playlists.txt`, …) read names the same way, but videos are always saved under the playlist's YouTube title (`<Video directory>\<YouTube playlist title>\`). The `#name` is only used as a fallback folder name when YouTube doesn't report the playlist's title.
 
 ### Live Videos
 

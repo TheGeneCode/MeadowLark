@@ -6,7 +6,7 @@ enabled-rung filtering, descent capping, and qmeta propagation.
 
 Patch targets:
   - src.download_executor.YoutubeDL: context manager mock, records opts
-  - src.download_executor.get_setting: returns vfmt for VID_DL_VIDEO_FORMAT
+  - settings_dialog._runtime: seeded with vfmt for VID_DL_VIDEO_FORMAT
   - src.download_executor.ENABLED_RESOLUTIONS: list of rungs the user has turned on
   - src.download_executor.MAX_LADDER_DESCENT: cap on descent depth (usually 3)
 """
@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from yt_dlp.utils import DownloadError
 
+import src.settings_dialog as sd
 from src.download_executor import DownloadExecutor
 
 # ---------------------------------------------------------------------------
@@ -29,14 +30,8 @@ def _make_executor() -> DownloadExecutor:
 
 
 def _patch_get_setting(vfmt: object) -> object:
-    """Patch src.download_executor.get_setting to return vfmt for VID_DL_VIDEO_FORMAT."""
-
-    def _fake_get_setting(key: str) -> object:
-        if key == "VID_DL_VIDEO_FORMAT":
-            return vfmt
-        return None
-
-    return patch("src.download_executor.get_setting", side_effect=_fake_get_setting)
+    """Seed the runtime store with vfmt for VID_DL_VIDEO_FORMAT."""
+    return patch.dict(sd._runtime, {"VID_DL_VIDEO_FORMAT": vfmt})
 
 
 class _CallTrackingYDL:

@@ -11,6 +11,7 @@ Shared vocabulary for this project. When in doubt, use these terms exactly as de
 | **Playlist** | A YouTube/web playlist URL containing a collection of Videos |
 | **Podcast** | A Playlist configured for audio-only extraction; items are Episodes |
 | **Playlist File** | A `.txt` file containing a list of Playlist URLs |
+| **Label** | The `#Name` above a Playlist in a Playlist File; for Podcasts it is the shared output folder (category) |
 | **Video** | An individual item within a video Playlist |
 | **Episode** | An individual item within a Podcast |
 | **Video Key** | The unique YouTube identifier from a URL (e.g. `Pyd3cOxuaQk` from `?v=Pyd3cOxuaQk`) |
@@ -44,13 +45,18 @@ A Playlist configured for audio-only extraction. Podcasts live in the audio Play
 ---
 
 ### Playlist File
-A `.txt` file that contains a list of Playlist URLs, one per line. An optional `#Name` comment above a URL gives the Playlist a human-readable label. There are three Playlist Files:
+A `.txt` file that contains a list of Playlist URLs, one per line. A `#Name` line gives a **Label** to every Playlist below it, up to the next `#` line (a lone `#` clears it; a commented-out link does not). There are three Playlist Files:
 
 | File | Quality | Contains |
 |------|---------|----------|
 | `playlists.txt` | 1080p | Video Playlists |
 | `720playlists.txt` | 720p | Video Playlists |
 | `audio playlists.txt` | audio only | Podcasts |
+
+---
+
+### Label
+The name a Playlist gets from the nearest `#Name` line above it in a Playlist File. For Podcasts the Label is the output folder, so several Podcasts under one Label (a **category**) share a folder. For video Playlists it is only the fallback name for an `NA/` folder. Code: `PlaylistFileEntry.label`, `labels_by_playlist_id()`, `playlist_comments`.
 
 ---
 
@@ -119,7 +125,7 @@ The yt-dlp Python dict representing a single Video or Episode. Key fields: `id` 
 A dict attached to each download job that carries routing and logging information:
 - `site` — detected platform (`"youtube"`, `"nebula"`, `"unknown"`)
 - `type` — the Source value
-- `playlist_comments` — dict mapping playlist ID → user-assigned name
+- `playlist_comments` — dict mapping playlist ID → **Label**
 - `playlist_id` — ID of the parent Playlist, if applicable
 
 ---

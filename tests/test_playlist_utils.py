@@ -7,11 +7,19 @@ from unittest.mock import patch
 
 import pytest
 
+import src.settings_dialog as sd
 from src.playlist_utils import (
+    _PLAYLIST_TEMPLATE,
+    _PLAYLIST_TEMPLATE_V1,
+    PlaylistFileEntry,
     get_playlist_file_for_source,
     is_primitive_technology,
+    labels_by_playlist_id,
     load_playlist_comments_for_source,
+    load_playlist_entries_for_source,
     load_playlist_urls,
+    parse_playlist_lines,
+    playlist_id_for_line,
     write_template_playlist_file,
 )
 
@@ -211,17 +219,14 @@ def test_get_playlist_file_for_source_unknown_returns_none() -> None:
 
 
 def test_playlist_file_for_new_rung() -> None:
-    with patch("src.playlist_utils.get_setting", return_value=None):
+    with patch.dict(sd._runtime, {}, clear=True):
         result = get_playlist_file_for_source("1440playlists")
     assert result is not None
     assert result.endswith("1440playlists.txt")
 
 
 def test_playlist_file_setting_overrides_default() -> None:
-    with patch(
-        "src.playlist_utils.get_setting",
-        side_effect=lambda key: "C:/tmp/x.txt" if key == "VID_DL_PLAYLISTS_2160_FILE" else None,
-    ):
+    with patch.dict(sd._runtime, {"VID_DL_PLAYLISTS_2160_FILE": "C:/tmp/x.txt"}, clear=True):
         result = get_playlist_file_for_source("2160playlists")
     assert result == "C:/tmp/x.txt"
 
@@ -376,3 +381,171 @@ def test_write_template_playlist_file_embedded_null_byte_raises_valueerror(
 
     with pytest.raises(ValueError, match="null"):
         write_template_playlist_file(bad_path)
+
+
+# ---------------------------------------------------------------------------
+# parse_playlist_lines — sticky #Name labels
+# ---------------------------------------------------------------------------
+
+
+def _labels(text: str) -> list[tuple[str, str | None]]:
+    return [(e.url, e.label) for e in parse_playlist_lines(text.splitlines())]
+
+
+def test_parse_label_applies_to_all_links_below() -> None:
+    assert _labels("#Tech\nA\nB\n#Other\nC") == [("A", "Tech"), ("B", "Tech"), ("C", "Other")]
+
+
+def test_parse_returns_entry_records() -> None:
+    assert parse_playlist_lines(["#Tech", "A"]) == [PlaylistFileEntry(url="A", label="Tech")]
+
+
+def test_parse_one_label_per_link_unchanged() -> None:
+    assert _labels("#One\nA\n#Two\nB") == [("A", "One"), ("B", "Two")]
+
+
+def test_parse_link_before_any_label_is_unlabelled() -> None:
+    assert _labels("A\n#Tech\nB") == [("A", None), ("B", "Tech")]
+
+
+def test_parse_lone_hash_ends_category() -> None:
+    assert _labels("#Tech\nA\n#\nB") == [("A", "Tech"), ("B", None)]
+
+
+def test_parse_blank_line_does_not_end_category() -> None:
+    assert _labels("#Tech\nA\n\nB") == [("A", "Tech"), ("B", "Tech")]
+
+
+def test_parse_paused_url_keeps_category() -> None:
+    text = "#Tech\nA\n#https://www.youtube.com/playlist?list=PLx\nB"
+    assert _labels(text) == [("A", "Tech"), ("B", "Tech")]
+
+
+def test_parse_paused_bare_id_keeps_category() -> None:
+    text = "#Tech\nA\n#PLRWvNQVqAeWIafhw3XHnmz_EHOp32qoZW\nB"
+    assert _labels(text) == [("A", "Tech"), ("B", "Tech")]
+
+
+def test_parse_all_caps_word_is_a_label_not_an_id() -> None:
+    assert _labels("#PLAYTHROUGHSXYZ\nA") == [("A", "PLAYTHROUGHSXYZ")]
+
+
+def test_parse_consecutive_labels_last_wins() -> None:
+    assert _labels("#Old\n#New\nA") == [("A", "New")]
+
+
+def test_parse_double_hash_label_keeps_second_hash() -> None:
+    assert _labels("##X\nA") == [("A", "#X")]
+
+
+@pytest.mark.parametrize("template", [_PLAYLIST_TEMPLATE, _PLAYLIST_TEMPLATE_V1])
+def test_parse_template_header_is_not_a_label(template: str) -> None:
+    assert _labels(template + "A\n") == [("A", None)]
+
+
+def test_template_header_line_mid_file_does_not_clear_label() -> None:
+    header_line = "# MeadowLark Playlist File"
+    assert _labels(f"#Tech\nA\n{header_line}\nB") == [("A", "Tech"), ("B", "Tech")]
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("https://www.youtube.com/playlist?list=PLabc", "PLabc"),
+        ("PLbare123", "PLbare123"),
+        ("https://www.youtube.com/watch?v=x", None),
+    ],
+)
+def test_playlist_id_for_line(line: str, expected: str | None) -> None:
+    assert playlist_id_for_line(line) == expected
+
+
+def test_labels_by_playlist_id_skips_unlabelled_and_idless() -> None:
+    entries = [
+        PlaylistFileEntry("https://www.youtube.com/playlist?list=PL1", "Tech"),
+        PlaylistFileEntry("PL2", "Tech"),
+        PlaylistFileEntry("https://www.youtube.com/watch?v=x", "Tech"),
+        PlaylistFileEntry("https://www.youtube.com/playlist?list=PL3", None),
+    ]
+    assert labels_by_playlist_id(entries) == {"PL1": "Tech", "PL2": "Tech"}
+
+
+def test_load_playlist_comments_category_maps_every_id(tmp_path: Path) -> None:
+    playlist_file = tmp_path / "playlists.txt"
+    playlist_file.write_text("#Tech\nhttps://www.youtube.com/playlist?list=PL1\nPL2abcdefghijkl\n")
+    with patch("src.playlist_utils.get_playlist_file_for_source", return_value=str(playlist_file)):
+        result = load_playlist_comments_for_source("audio_playlists")
+    assert result == {"PL1": "Tech", "PL2abcdefghijkl": "Tech"}
+
+
+def test_load_playlist_entries_returns_parsed_entries(tmp_path: Path) -> None:
+    playlist_file = tmp_path / "playlists.txt"
+    playlist_file.write_text("#Tech\nA\nB\n")
+    with patch("src.playlist_utils.get_playlist_file_for_source", return_value=str(playlist_file)):
+        result = load_playlist_entries_for_source("audio_playlists")
+    assert result == [PlaylistFileEntry("A", "Tech"), PlaylistFileEntry("B", "Tech")]
+
+
+def test_load_playlist_entries_unknown_source_is_none() -> None:
+    assert load_playlist_entries_for_source("unknown_source") is None
+
+
+def test_load_playlist_entries_missing_file_is_none(tmp_path: Path) -> None:
+    with patch(
+        "src.playlist_utils.get_playlist_file_for_source",
+        return_value=str(tmp_path / "nope.txt"),
+    ):
+        assert load_playlist_entries_for_source("audio_playlists") is None
+
+
+def test_load_playlist_entries_undecodable_file_is_none(tmp_path: Path) -> None:
+    playlist_file = tmp_path / "playlists.txt"
+    playlist_file.write_bytes(b"\xff\xfe\x00bad")
+    with patch("src.playlist_utils.get_playlist_file_for_source", return_value=str(playlist_file)):
+        assert load_playlist_entries_for_source("audio_playlists") is None
+
+
+def test_load_playlist_urls_ignores_labels_pauses_and_category_ends(tmp_path: Path) -> None:
+    playlist_file = tmp_path / "playlists.txt"
+    playlist_file.write_text("#Tech\nA\n#https://x/paused\nB\n#\nC\n", encoding="utf-8")
+    assert load_playlist_urls(playlist_file) == ["A", "B", "C"]
+
+
+@pytest.mark.parametrize(
+    "paused",
+    [
+        "#www.youtube.com/playlist?list=PLx",
+        "#HTTPS://www.youtube.com/playlist?list=PLx",
+        "#http://www.youtube.com/playlist?list=PLx",
+        "#  https://www.youtube.com/playlist?list=PLx",
+        "#UUabc1234567890defghijk",
+        "#OLAK5uy_abcdefghij",
+    ],
+)
+def test_parse_paused_entry_forms_keep_category(paused: str) -> None:
+    assert _labels(f"#Tech\nA\n{paused}\nB") == [("A", "Tech"), ("B", "Tech")]
+
+
+def test_parse_bare_id_shape_length_boundary_label_vs_paused() -> None:
+    # 17 chars is a name; 18 (PL + 16, the shortest real id shape) is a paused id.
+    assert _labels("#Tech\nA\n#PLabcdefghijklm12\nB") == [("A", "Tech"), ("B", "PLabcdefghijklm12")]
+    assert _labels("#Tech\nA\n#PLabcdefghijklm123\nB") == [("A", "Tech"), ("B", "Tech")]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["TLDR-weekly-news", "LLMresearchpapers", "PL_Series_Names", "ULTRAmarathonpodcasts"],
+)
+def test_parse_one_word_name_that_resembles_an_id_stays_a_label(name: str) -> None:
+    assert _labels(f"#Tech\nA\n#{name}\nB") == [("A", "Tech"), ("B", name)]
+
+
+def test_parse_whitespace_padded_label_and_lone_hash_are_trimmed() -> None:
+    assert _labels("#   Tech News  \nA\n#   \nB") == [("A", "Tech News"), ("B", None)]
+
+
+def test_load_playlist_comments_undecodable_file_returns_empty(tmp_path: Path) -> None:
+    playlist_file = tmp_path / "playlists.txt"
+    playlist_file.write_bytes(b"\xff\xfe\x00bad")
+    with patch("src.playlist_utils.get_playlist_file_for_source", return_value=str(playlist_file)):
+        assert load_playlist_comments_for_source("audio_playlists") == {}

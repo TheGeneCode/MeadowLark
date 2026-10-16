@@ -148,10 +148,11 @@ VIDEO_STORAGE_DIR: Final[Path] = _resolve_path(
 )
 
 # JavaScript runtime configuration
-if getattr(sys, "frozen", False):
-    VENV_SCRIPTS_DIR: Final[Path] = Path(sys._MEIPASS)  # type: ignore[attr-defined]
-else:
-    VENV_SCRIPTS_DIR: Final[Path] = _resolve_path("VID_DL_VENV_SCRIPTS", ".venv/Scripts")
+VENV_SCRIPTS_DIR: Final[Path] = (
+    Path(sys._MEIPASS)  # type: ignore[attr-defined]
+    if getattr(sys, "frozen", False)
+    else _resolve_path("VID_DL_VENV_SCRIPTS", ".venv/Scripts")
+)
 
 # Make the bundled Deno runtime discoverable on PATH. The yt-dlp PO-token
 # provider (bgutil, script mode) locates node/deno via PATH, not via yt-dlp's

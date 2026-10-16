@@ -895,7 +895,7 @@ class TestRunDownloadUrlListener:
 
         listener.assert_called_once_with("a")
 
-    @patch("src.download_executor.get_setting", new=Mock(return_value="mp4"))
+    @patch("src.download_executor.get_str_setting", new=Mock(return_value="mp4"))
     def test_rung_fallback_keeps_listener(self) -> None:
         def listener(_url: str) -> None:
             return None

@@ -48,6 +48,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import src.settings_dialog as sd
 from src import config, logging_utils
 from src.ydl_options import JS_RUNTIMES_CONFIG, resolve_cookiefile
 
@@ -231,12 +232,12 @@ class TestResolveCookiefile:
     def test_setting_override_is_honoured(self, tmp_path: Path) -> None:
         """An explicit setting wins over the config default."""
         override = tmp_path / "mine" / "cookies.txt"
-        with patch("src.ydl_options.get_setting", return_value=str(override)):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": str(override)}):
             assert resolve_cookiefile() == str(override.resolve())
 
     def test_expands_user_home(self) -> None:
         """A '~' path is expanded rather than taken literally."""
-        with patch("src.ydl_options.get_setting", return_value="~/cookies.txt"):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": "~/cookies.txt"}):
             resolved = resolve_cookiefile()
         assert "~" not in resolved
         assert resolved == str((Path.home() / "cookies.txt").resolve())
@@ -244,20 +245,20 @@ class TestResolveCookiefile:
     @pytest.mark.parametrize("value", [True, False, None, "", 0, Path("x")])
     def test_non_string_setting_falls_back_to_default(self, value: object) -> None:
         """A settings store that returns a non-path must not break option building."""
-        with patch("src.ydl_options.get_setting", return_value=value):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": value}):
             resolved = resolve_cookiefile()
         assert resolved == str(Path(config.COOKIES_FILE).expanduser().resolve())
 
     def test_missing_file_still_resolves(self, tmp_path: Path) -> None:
         """The jar is created on first write; a missing path is not an error."""
         missing = tmp_path / "not-there-yet.txt"
-        with patch("src.ydl_options.get_setting", return_value=str(missing)):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": str(missing)}):
             assert resolve_cookiefile() == str(missing.resolve())
 
     def test_unc_path_resolves_without_raising(self) -> None:
         """A UNC path must not trip Path.resolve() up on Windows."""
         unc = r"\\fileserver\share\cookies.txt"
-        with patch("src.ydl_options.get_setting", return_value=unc):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": unc}):
             resolved = resolve_cookiefile()
         assert resolved.startswith("\\\\fileserver\\share")
         assert resolved.endswith("cookies.txt")
@@ -265,7 +266,7 @@ class TestResolveCookiefile:
     def test_trailing_separator_is_normalized(self, tmp_path: Path) -> None:
         """A trailing separator on the configured dir must not survive resolution."""
         configured = str(tmp_path) + "\\"
-        with patch("src.ydl_options.get_setting", return_value=configured):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": configured}):
             resolved = resolve_cookiefile()
         assert not resolved.endswith("\\")
         assert resolved == str(tmp_path.resolve())
@@ -280,7 +281,7 @@ class TestResolveCookiefile:
             link.symlink_to(real)
         except OSError:
             pytest.skip("symlinks require elevated privileges on this host")
-        with patch("src.ydl_options.get_setting", return_value=str(link)):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": str(link)}):
             resolved = resolve_cookiefile()
         assert resolved == str(real.resolve())
 
@@ -295,7 +296,7 @@ class TestResolveCookiefile:
         """
         directory = tmp_path / "not_a_file"
         directory.mkdir()
-        with patch("src.ydl_options.get_setting", return_value=str(directory)):
+        with patch.dict(sd._runtime, {"VID_DL_COOKIES_FILE": str(directory)}):
             resolved = resolve_cookiefile()
         assert resolved == str(directory.resolve())
 

@@ -19,6 +19,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.40.2",
     "pillow>=12.3.0",
     "pyinstaller>=6.0",
     "pytest>=8.4",
@@ -30,6 +31,17 @@ dev = [
 testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config"]
 filterwarnings = ["error"]
+
+# Type checker (backlog #24). `basic`, not basedpyright's default `recommended`: the floor is
+# "annotations are verified", not maximal strictness. Pre-existing errors live in
+# .basedpyright/baseline.json; only new ones fail. Regenerate with `basedpyright --writebaseline`
+# after fixing baselined errors (it only ever shrinks — never baseline a new error).
+# scripts/ is left out: most of it is gitignored local tooling, so CI and a dev checkout would
+# check different file sets. pythonVersion pins the requires-python floor (guarded by a test).
+[tool.basedpyright]
+include = ["meadowlark.pyw", "src", "tests"]
+typeCheckingMode = "basic"
+pythonVersion = "3.11"
 
 [tool.setuptools.packages.find]
 where = ["."]

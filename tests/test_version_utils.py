@@ -167,6 +167,20 @@ def test_is_yt_dlp_update_available_returns_false_when_up_to_date() -> None:
         assert latest == (2026, 2, 2)
 
 
+def test_is_yt_dlp_update_available_flag_is_bool_when_version_unknown() -> None:
+    with (
+        patch("src.version_utils.get_current_yt_dlp_version", return_value=None),
+        patch(
+            "src.version_utils.get_latest_yt_dlp_version",
+            return_value="2026.02.02",
+        ),
+    ):
+        available, current, latest = is_yt_dlp_update_available()
+        assert available is False
+        assert current is None
+        assert latest == (2026, 2, 2)
+
+
 # --- get_latest_app_release ---
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from PyQt6.QtWidgets import QApplication, QFormLayout, QTabWidget
+from PyQt6.QtWidgets import QApplication, QFormLayout, QLineEdit, QTabWidget
 
 import src.settings_dialog as sd
 from src.resolutions import (
@@ -350,7 +350,9 @@ class TestApplyCombinedChanges:
         ):
             dialog = SettingsDialog()
             dialog._resolution_checks[2160].setChecked(True)
-            dialog._edits["VID_DL_LABEL_READY_TEXT"].setText("New Ready Text")
+            ready_edit = dialog._edits["VID_DL_LABEL_READY_TEXT"]
+            assert isinstance(ready_edit, QLineEdit)
+            ready_edit.setText("New Ready Text")
             received: dict[str, object] = {}
             dialog.settings_changed.connect(received.update)
             dialog._apply()

@@ -89,7 +89,9 @@ HELP_TEXT: dict[str, str] = {
     "VID_DL_PLAYLISTS_AUDIO_FILE": (
         "Playlist file for podcast/audio downloads.\n"
         "The file is copied into AppData so the original can be moved or deleted.\n"
-        "Each line should be a YouTube playlist URL, optionally preceded by a #Comment line."
+        "Each line is a YouTube playlist URL or ID. A #Name line names every playlist below it, "
+        "up to the next # line, and that name is their shared folder - one #Name per link gives "
+        "one folder per show."
     ),
     "VID_DL_COOKIES_FILE": (
         "Path to a cookies.txt file exported from your browser.\n"
@@ -145,7 +147,8 @@ for _preset in RESOLUTION_PRESETS:
     HELP_TEXT[playlist_file_key(_preset.height)] = (
         f"Playlist file for {_preset.label} video downloads ({_preset.description}).\n"
         "The file is copied into AppData so the original can be moved or deleted.\n"
-        "Each line should be a YouTube playlist URL, optionally preceded by a #Comment line."
+        "Each line is a YouTube playlist URL or ID. A #Name line labels every playlist below it, "
+        "up to the next # line; videos are still saved under the YouTube playlist title."
     )
 
 # ============================================================================
@@ -204,6 +207,25 @@ def get_setting(key: str) -> object:
     return _runtime.get(key)
 
 
+def get_str_setting(key: str, default: str = "") -> str:
+    """Return *key* as a non-empty string, or *default* when unset, empty, or not a str."""
+    value = _runtime.get(key)
+    return value if isinstance(value, str) and value else default
+
+
+def get_int_setting(key: str, default: int) -> int:
+    """
+    Return *key* as an int, or *default* when unset, zero, empty, or not an int/str.
+
+    A numeric string (an older .env round-trip) is parsed; a non-numeric one raises
+    ValueError, since that is a corrupt setting rather than an absent one.
+    """
+    value = _runtime.get(key)
+    if isinstance(value, bool) or not isinstance(value, int | str) or not value:
+        return default
+    return int(value)
+
+
 def enabled_heights() -> tuple[int, ...]:
     """Return the currently enabled resolution rungs, highest first."""
     raw = get_setting("VID_DL_ENABLED_RESOLUTIONS")
@@ -257,7 +279,7 @@ def _make_help_button(key: str, parent: QWidget) -> QPushButton:
 
 
 def _make_dir_row(label: str, key: str, parent: QWidget) -> tuple[QHBoxLayout, QLineEdit]:
-    edit = QLineEdit(str(get_setting(key) or ""), parent)
+    edit = QLineEdit(get_str_setting(key), parent)
     browse = QPushButton("Browse…", parent)
     help_btn = _make_help_button(key, parent)
 
@@ -282,7 +304,7 @@ def _make_file_row(
     copy_to_appdata: bool = False,
     dest_name: str = "",
 ) -> tuple[QHBoxLayout, QLineEdit]:
-    edit = QLineEdit(str(get_setting(key) or ""), parent)
+    edit = QLineEdit(get_str_setting(key), parent)
     browse = QPushButton("Browse…", parent)
     help_btn = _make_help_button(key, parent)
 
@@ -325,7 +347,7 @@ def _make_combo_row(
     key: str, options: list[tuple[str, str]], parent: QWidget
 ) -> tuple[QHBoxLayout, QComboBox]:
     combo = QComboBox(parent)
-    current = str(get_setting(key) or "")
+    current = get_str_setting(key)
     for value, description in options:
         combo.addItem(f".{value} — {description}", userData=value)
     idx = combo.findData(current)
@@ -359,7 +381,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings")
         self.setMinimumWidth(520)
 
-        self._edits: dict[str, QLineEdit | QCheckBox | QSpinBox] = {}
+        self._edits: dict[str, QLineEdit | QCheckBox | QSpinBox | QComboBox] = {}
         self._resolution_checks: dict[int, QCheckBox] = {}
 
         tabs = QTabWidget(self)
@@ -508,7 +530,7 @@ class SettingsDialog(QDialog):
             )
         text_fields.append(("Button — YT Podcasts:", "VID_DL_LABEL_BTN_PODCASTS"))
         for lbl, key in text_fields:
-            edit = QLineEdit(str(get_setting(key) or ""), self)
+            edit = QLineEdit(get_str_setting(key), self)
             help_btn = _make_help_button(key, self)
             row = QHBoxLayout()
             row.addWidget(edit)
@@ -556,7 +578,7 @@ class SettingsDialog(QDialog):
         interval = QSpinBox(self)
         interval.setRange(5, 1440)
         interval.setSuffix(" min")
-        interval.setValue(int(get_setting("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES") or 60))
+        interval.setValue(get_int_setting("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES", 60))
         interval.setEnabled(auto_check.isChecked())
         help_interval = _make_help_button("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES", self)
         interval_row = QHBoxLayout()

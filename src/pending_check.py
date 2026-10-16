@@ -19,7 +19,7 @@ from .pending_queue import (
 from .playlist_entry import playlist_entry_target, restrict_to_entry
 from .release_status import release_at_from_timestamp
 from .ydl_options import build_podcast_outtmpl
-from .ydl_utils import extract_release_info
+from .ydl_utils import YdlFactory, extract_release_info
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,7 +49,7 @@ class PendingCheckDeps:
     set_progress_range: Callable[[int, int], None]
     detect_site: Callable[[list[str]], str]
     load_playlist_comments: Callable[[str], Any]
-    ydl_class: type = field(default=yt_dlp.YoutubeDL)
+    ydl_class: YdlFactory = field(default=yt_dlp.YoutubeDL)
 
 
 def is_available(info: dict) -> bool:

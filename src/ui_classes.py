@@ -40,7 +40,7 @@ class PlaylistDialog(QDialog):
     ADDED_TEXT = "Added!!!"
     urls_dropped = pyqtSignal(list, str)
 
-    def __init__(self, playlist_count: int, parent: QWidget = None) -> None:
+    def __init__(self, playlist_count: int, parent: QWidget | None = None) -> None:
         """
         Initialize the playlist selection dialog.
 
@@ -169,7 +169,7 @@ class DropLabel(QLabel):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self._revert_text)
 
-    def dragEnterEvent(self, event: QDragEnterEvent) -> bool:
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """
         Handle the drag enter event.
 

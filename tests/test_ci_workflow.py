@@ -323,7 +323,59 @@ def test_meadowlark_pyw_docstring_floor_matches_pyproject() -> None:
     assert match.group(1) == _requires_python_floor()
 
 
-def test_workflows_carry_no_private_genekit_auth_step() -> None:
+def test_basedpyright_python_version_matches_pyproject_floor() -> None:
+    """
+    The type checker must judge code against the oldest supported interpreter.
+
+    Without the pin basedpyright assumes the interpreter it runs on (3.14 in dev
+    and CI), so a 3.12+-only stdlib name or syntax would type-check clean and
+    then break the 3.11 leg at runtime.
+    """
+    with (_REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        checker = tomllib.load(handle)["tool"]["basedpyright"]
+    assert checker["pythonVersion"] == _requires_python_floor()
+
+
+def test_basedpyright_is_declared_in_the_dev_dependency_group() -> None:
+    """
+    `uv run --no-sync basedpyright` only works if the locked dev group installs it.
+
+    Dropping it from `[dependency-groups].dev` would leave local `uv run` tolerant
+    (it can fetch ad hoc) while CI's `--no-sync` run dies with "command not found".
+    """
+    with (_REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        dev_group = tomllib.load(handle)["dependency-groups"]["dev"]
+    names = [re.split(r"[<>=!~\s\[;]", dep, maxsplit=1)[0] for dep in dev_group]
+    assert "basedpyright" in names, f"basedpyright missing from the dev group: {names}"
+
+
+def test_ci_typecheck_job_syncs_full_dev_env_then_runs_basedpyright() -> None:
+    """
+    The `typecheck` job must install everything, then actually invoke basedpyright.
+
+    Two silent failure modes: a job that never runs basedpyright (green no-op), and
+    a lint-style slim sync that skips PyQt6/yt-dlp/genekit, which makes every import
+    unresolved so the frozen baseline no longer matches. `--no-sync` on the run line
+    is only safe if a prior step did the full `--locked --group dev` sync.
+    """
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    start = re.search(r"^  typecheck:$", workflow, re.MULTILINE)
+    assert start is not None, "no '  typecheck:' job key found in ci.yml"
+    following = re.search(r"^  \w[\w-]*:$", workflow[start.end() :], re.MULTILINE)
+    end = start.end() + following.start() if following else len(workflow)
+    job = workflow[start.start() : end]
+
+    sync = re.search(r"^\s*(?:- )?run: (uv sync .*)$", job, re.MULTILINE)
+    assert sync is not None, "typecheck job has no `uv sync` step"
+    for required in ("--locked", "--group dev"):
+        assert required in sync.group(1), f"typecheck sync lacks {required!r}: {sync.group(1)}"
+    for forbidden in ("--no-dev", "--only-group", "--no-install"):
+        assert forbidden not in sync.group(1), f"typecheck sync uses {forbidden!r}"
+
+    run = re.search(r"^\s*(?:- )?run: uv run (?:--no-sync )?basedpyright\s*$", job, re.MULTILINE)
+    assert run is not None, "typecheck job never runs `uv run basedpyright`"
+    assert sync.start() < run.start(), "basedpyright runs before the dependency sync"
+
     """
     Guard: no workflow carries the dead private-genekit auth step (the repo is public).
 

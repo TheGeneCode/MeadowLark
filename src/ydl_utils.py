@@ -1,16 +1,28 @@
 """YDL utility functions for common yt-dlp operations."""
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from typing import Any, TypeAlias
+
 import yt_dlp
 
 from .ydl_options import build_shared_extraction_opts
 
+YdlFactory: TypeAlias = Callable[..., AbstractContextManager[Any]]
+"""Called like ``yt_dlp.YoutubeDL(opts)``; the context value must offer ``extract_info``."""
+
 _QUIET_YDL_OPTS: dict[str, bool] = {"quiet": True, "no_warnings": True}
+
+
+def _resolve_factory(ydl_class: YdlFactory | None) -> YdlFactory:
+    """Return *ydl_class*, or ``yt_dlp.YoutubeDL`` looked up now so patches of it apply."""
+    return ydl_class or yt_dlp.YoutubeDL
 
 
 def extract_playlist_info(
     url: str,
     playlistend: int | None = None,
-    ydl_class: type | None = None,
+    ydl_class: YdlFactory | None = None,
     extra_opts: dict | None = None,
 ) -> dict:
     """
@@ -26,28 +38,26 @@ def extract_playlist_info(
     Args:
         url: The URL to extract info from.
         playlistend: Optional limit on number of entries to extract.
-        ydl_class: Optional custom YoutubeDL class for injection.
+        ydl_class: Optional YoutubeDL class or factory for injection.
         extra_opts: Optional extra options merged after the quiet baseline
             (e.g. ``{"cookiefile": "/path/to/cookies.txt"}``).
 
     Returns:
         Dictionary containing extracted info.
     """
-    if ydl_class is None:
-        ydl_class = yt_dlp.YoutubeDL
     opts: dict = {**build_shared_extraction_opts(), **_QUIET_YDL_OPTS}
     if extra_opts:
         opts.update(extra_opts)
     if playlistend:
         opts["playlistend"] = playlistend
-    with ydl_class(opts) as ydl:
+    with _resolve_factory(ydl_class)(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
 
 def extract_video_entries(
     url: str,
     extract_flat: bool | str = True,
-    ydl_class: type | None = None,
+    ydl_class: YdlFactory | None = None,
     cookiefile: str | None = None,
 ) -> list:
     """
@@ -59,15 +69,13 @@ def extract_video_entries(
     Args:
         url: The URL to extract entries from.
         extract_flat: Whether to extract flat info (True) or full info (False).
-        ydl_class: Optional custom YoutubeDL class for injection.
+        ydl_class: Optional YoutubeDL class or factory for injection.
         cookiefile: Optional cookies file path, so private/unlisted playlists
             enumerate their entries instead of coming back empty.
 
     Returns:
         List of entry dictionaries.
     """
-    if ydl_class is None:
-        ydl_class = yt_dlp.YoutubeDL
     opts = {
         **build_shared_extraction_opts(),
         **_QUIET_YDL_OPTS,
@@ -75,7 +83,7 @@ def extract_video_entries(
     }
     if cookiefile:
         opts["cookiefile"] = str(cookiefile)
-    with ydl_class(opts) as ydl:
+    with _resolve_factory(ydl_class)(opts) as ydl:
         info = ydl.extract_info(url, download=False)
         return info.get("entries", [info])
 
@@ -83,7 +91,7 @@ def extract_video_entries(
 def extract_release_info(
     url: str,
     cookiefile: str | None = None,
-    ydl_class: type | None = None,
+    ydl_class: YdlFactory | None = None,
 ) -> dict:
     """
     Metadata-only probe that tolerates a video with no downloadable formats.
@@ -98,13 +106,11 @@ def extract_release_info(
     Args:
         url: The video URL to probe.
         cookiefile: Optional cookies file path for age-restricted lookups.
-        ydl_class: Optional custom YoutubeDL class for injection.
+        ydl_class: Optional YoutubeDL class or factory for injection.
 
     Returns:
         The extracted info dict, or {} when yt-dlp returns nothing.
     """
-    if ydl_class is None:
-        ydl_class = yt_dlp.YoutubeDL
     opts: dict = {
         **build_shared_extraction_opts(),
         **_QUIET_YDL_OPTS,
@@ -114,5 +120,5 @@ def extract_release_info(
     }
     if cookiefile:
         opts["cookiefile"] = str(cookiefile)
-    with ydl_class(opts) as ydl:
+    with _resolve_factory(ydl_class)(opts) as ydl:
         return ydl.extract_info(url, download=False) or {}

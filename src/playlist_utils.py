@@ -1,11 +1,15 @@
 """Playlist and URL detection utilities."""
 
+import re
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from .config import PLAYLISTS_AUDIO_FILE, playlist_path_for_height
 from .logging_utils import log_exception
 from .resolutions import height_from_source, playlist_file_key
-from .settings_dialog import get_setting
+from .settings_dialog import get_str_setting
 from .url_utils import extract_playlist_id
 
 
@@ -68,15 +72,15 @@ def get_playlist_file_for_source(source: str) -> str | None:
         File path string or None if source is not recognized.
     """
     if source == "audio_playlists":
-        return get_setting("VID_DL_PLAYLISTS_AUDIO_FILE") or str(PLAYLISTS_AUDIO_FILE)
+        return get_str_setting("VID_DL_PLAYLISTS_AUDIO_FILE", str(PLAYLISTS_AUDIO_FILE))
     height = height_from_source(source)
     if height is None or not source.endswith("playlists"):
         return None
-    configured = get_setting(playlist_file_key(height))
-    return str(configured) if configured else str(playlist_path_for_height(height))
+    return get_str_setting(playlist_file_key(height), str(playlist_path_for_height(height)))
 
 
-_PLAYLIST_TEMPLATE = """\
+# Previous template text, kept only so its header lines are ignored when parsing old files.
+_PLAYLIST_TEMPLATE_V1: Final = """\
 # MeadowLark Playlist File
 # Add one playlist per line. To give a playlist a name, put a #Name line directly above it.
 #
@@ -90,6 +94,99 @@ _PLAYLIST_TEMPLATE = """\
 #
 # Lines that start with # are ignored by the app — remove the leading # to activate an entry.
 """
+
+_PLAYLIST_TEMPLATE: Final = """\
+# MeadowLark Playlist File
+# One playlist per line: a full YouTube playlist URL, or just the playlist ID
+# (the part after "list=" in a YouTube URL).
+#
+# A line starting with # is a NAME for every playlist below it, up to the next # line.
+# In the podcast (audio) file the name is the folder episodes are saved in,
+# so several playlists under one name share one folder (a category):
+#   #Tech News
+#   https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+#   PLyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+# Prefer one folder per show? Put a #Name above every link instead.
+# A line with just # ends a category. Putting # in front of a link pauses it
+# without ending its category. Video files always save under the YouTube title.
+#
+"""
+
+_TEMPLATE_COMMENT_LINES: Final[frozenset[str]] = frozenset(
+    stripped
+    for template in (_PLAYLIST_TEMPLATE, _PLAYLIST_TEMPLATE_V1)
+    for raw in template.splitlines()
+    if (stripped := raw.strip()).startswith("#") and stripped != "#"
+)
+
+# yt-dlp's own bare-playlist-id shape. Real ids are random mixed-case base64 and at
+# least 18 chars (PL + 16), so a one-word name such as "#PLAYTHROUGHS",
+# "#TLDR-weekly-news" or "#LLMresearchpapers" (all-caps, too short, or no digit) stays
+# a name rather than a paused entry.
+_BARE_PLAYLIST_ID_RE: Final = re.compile(r"(?:PL|LL|EC|UU|FL|RD|UL|TL|PU|OLAK5uy_)[0-9A-Za-z_-]+")
+_MIN_BARE_PLAYLIST_ID_LEN: Final = 18
+
+
+def _is_paused_entry(body: str) -> bool:
+    """Return True if a ``#`` line's text is a commented-out link, not a name."""
+    if body.lower().startswith(("http://", "https://", "www.")):
+        return True
+    return (
+        len(body) >= _MIN_BARE_PLAYLIST_ID_LEN
+        and bool(_BARE_PLAYLIST_ID_RE.fullmatch(body))
+        and not body.isupper()
+        and any(ch.isdigit() for ch in body)
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PlaylistFileEntry:
+    """One active line of a Playlist File and the label (``#Name``) it falls under."""
+
+    url: str
+    label: str | None
+
+
+def parse_playlist_lines(lines: Iterable[str]) -> list[PlaylistFileEntry]:
+    """
+    Parse Playlist File lines into entries, each carrying the nearest ``#Name`` above it.
+
+    A ``#Name`` line labels every link below it until the next ``#`` line. A lone ``#``
+    clears the label; a commented-out link (``#https://…`` / ``#PLxxxx…``) and the file
+    template's own header lines are skipped without touching it. Blank lines are ignored.
+    """
+    entries: list[PlaylistFileEntry] = []
+    label: str | None = None
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if not line.startswith("#"):
+            entries.append(PlaylistFileEntry(url=line, label=label))
+            continue
+        body = line[1:].strip()
+        if not body:
+            label = None
+        elif line not in _TEMPLATE_COMMENT_LINES and not _is_paused_entry(body):
+            label = body
+    return entries
+
+
+def playlist_id_for_line(line: str) -> str | None:
+    """Return the playlist id for a Playlist File line: ``list=`` param, else the bare id itself."""
+    pl_id = extract_playlist_id(line)
+    if pl_id:
+        return pl_id
+    return None if line.startswith("http") else line
+
+
+def labels_by_playlist_id(entries: Iterable[PlaylistFileEntry]) -> dict[str, str]:
+    """Return ``{playlist_id: label}`` for every labelled entry with a resolvable playlist id."""
+    return {
+        pl_id: entry.label
+        for entry in entries
+        if entry.label and (pl_id := playlist_id_for_line(entry.url))
+    }
 
 
 def write_template_playlist_file(path: Path) -> None:
@@ -109,20 +206,42 @@ def load_playlist_urls(path: Path) -> list[str]:
         return []
     try:
         with path.open("r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+            return [entry.url for entry in parse_playlist_lines(f)]
     except (OSError, UnicodeDecodeError) as exc:
         log_exception(exc, f"Failed to read playlist file: {path}")
         return []
+
+
+def load_playlist_entries_for_source(source: str) -> list[PlaylistFileEntry] | None:
+    """
+    Return the parsed entries of the source's Playlist File.
+
+    None when the source has no Playlist File, the file is missing, or it cannot be read
+    (logged). Does not create a template; that stays load_playlist_urls' job.
+    """
+    playlist_file = get_playlist_file_for_source(source)
+    if not playlist_file:
+        return None
+    path = Path(playlist_file)
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return parse_playlist_lines(f)
+    except (OSError, UnicodeDecodeError) as exc:
+        log_exception(exc, f"Failed to read playlist file: {playlist_file}")
+        return None
 
 
 def load_playlist_comments_for_source(source: str) -> dict[str, str]:
     """
     Return {playlist_id: comment} for all commented entries in the source playlist file.
 
-    Parses lines of the form:
+    A ``#Some Comment`` line applies to every link below it until the next ``#`` line:
         #Some Comment
         https://www.youtube.com/playlist?list=PLxxx
-    and maps each playlist ID to its preceding comment.
+        PLyyy
+    maps both PLxxx and PLyyy to "Some Comment".
 
     Args:
         source: Source identifier ('<height>playlists' for any enabled rung, or
@@ -131,33 +250,4 @@ def load_playlist_comments_for_source(source: str) -> dict[str, str]:
     Returns:
         Dict mapping playlist_id -> comment text. Empty if file missing or no comments.
     """
-    playlist_file = get_playlist_file_for_source(source)
-    if not playlist_file:
-        return {}
-    path = Path(playlist_file)
-    if not path.exists():
-        return {}
-
-    comments: dict[str, str] = {}
-    last_comment: str | None = None
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            for raw_line in f:
-                line = raw_line.strip()
-                if not line:
-                    continue
-                if line.startswith("#"):
-                    last_comment = line[1:].strip()
-                else:
-                    if last_comment:
-                        pl_id = extract_playlist_id(line)
-                        if not pl_id and not line.startswith("http"):
-                            pl_id = (
-                                line  # bare playlist ID (e.g. PLRWvNQVqAeWIafhw3XHnmz_EHOp32qoZW)
-                            )
-                        if pl_id:
-                            comments[pl_id] = last_comment
-                    last_comment = None
-    except OSError as exc:
-        log_exception(exc, f"Failed to read playlist file: {playlist_file}")
-    return comments
+    return labels_by_playlist_id(load_playlist_entries_for_source(source) or [])

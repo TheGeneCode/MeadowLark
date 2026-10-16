@@ -18,7 +18,7 @@ from .dict_utils import DEFAULT_POSTPROCESSORS
 from .path_utils import slugify_if_too_long
 from .qt_protocols import YdlLogger, YdlProgressHook
 from .resolutions import RESOLUTION_PRESETS, playlist_source_key
-from .settings_dialog import get_setting
+from .settings_dialog import get_setting, get_str_setting
 
 MISC_PODCAST_LABEL = "misc"
 """Folder used for audio episodes whose show cannot be resolved."""
@@ -45,11 +45,7 @@ def resolve_cookiefile() -> str:
     Returns:
         Absolute path to the cookies file (it need not exist yet).
     """
-    # get_setting is untyped and backed by a generic store, so a non-string here
-    # is not a path at all -- fall back to the configured default rather than
-    # letting Path() raise and take the whole option build down with it.
-    configured = get_setting("VID_DL_COOKIES_FILE")
-    raw = configured if isinstance(configured, str) and configured else str(COOKIES_FILE)
+    raw = get_str_setting("VID_DL_COOKIES_FILE", str(COOKIES_FILE))
     return str(Path(raw).expanduser().resolve())
 
 
@@ -160,7 +156,7 @@ def podcast_base_dir() -> str:
     Returns:
         Posix-style path of the directory containing the per-show folders.
     """
-    misc_dir = Path(get_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR") or str(PODCAST_MISC_OUTPUT_DIR))
+    misc_dir = Path(get_str_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR", str(PODCAST_MISC_OUTPUT_DIR)))
     return misc_dir.parent.as_posix()
 
 
@@ -193,11 +189,11 @@ def get_source_options(source: str) -> dict[str, Any]:
     Returns:
         A dictionary of yt-dlp options specific to the source.
     """
-    vfmt = str(get_setting("VID_DL_VIDEO_FORMAT") or "mp4")
-    afmt = str(get_setting("VID_DL_AUDIO_FORMAT") or "m4a")
-    video_dir = Path(get_setting("VID_DL_VIDEO_STORAGE_DIR") or str(VIDEO_STORAGE_DIR))
+    vfmt = get_str_setting("VID_DL_VIDEO_FORMAT", "mp4")
+    afmt = get_str_setting("VID_DL_AUDIO_FORMAT", "m4a")
+    video_dir = Path(get_str_setting("VID_DL_VIDEO_STORAGE_DIR", str(VIDEO_STORAGE_DIR)))
     podcast_dir = Path(
-        get_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR") or str(PODCAST_MISC_OUTPUT_DIR)
+        get_str_setting("VID_DL_PODCAST_MISC_OUTPUT_DIR", str(PODCAST_MISC_OUTPUT_DIR))
     )
 
     source_options: dict[str, dict[str, Any]] = {

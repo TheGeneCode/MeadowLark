@@ -108,7 +108,7 @@ def is_yt_dlp_update_available() -> tuple[
     """
     current = normalize_version(get_current_yt_dlp_version() or "")
     latest = normalize_version(get_latest_yt_dlp_version() or "")
-    update = (current and latest) and (current != latest)
+    update = bool(current and latest and current != latest)
     return update, current or None, latest or None
 
 

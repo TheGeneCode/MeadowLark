@@ -13,6 +13,8 @@ once meadowlark.pyw has already imported the name into its own namespace.
 
 from pathlib import Path
 from queue import Queue
+from types import ModuleType
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -653,7 +655,7 @@ def test_reload_settings_applies_podcast_button_label_to_fresh_widget(
 
     with (
         patch.object(vd, "enabled_heights", return_value=(2160,)),
-        patch.object(vd, "get_setting", return_value=None),
+        _patch_settings(vd, {}),
     ):
         window.reload_settings(
             {
@@ -681,20 +683,27 @@ def test_build_resolution_cell_unregistered_height_raises(tmp_path: Path) -> Non
 
 
 # ---------------------------------------------------------------------------
-# get_setting() override / fallback-chain behaviour
+# Settings override / fallback-chain behaviour
 # ---------------------------------------------------------------------------
+
+
+def _patch_settings(vd: ModuleType, values: dict[str, object]) -> Any:
+    """
+    Replace the settings store that *vd*'s accessors read with *values*.
+
+    import_vid_module may re-import src.settings_dialog, so the store is reached
+    through vd's own accessor rather than a module imported here.
+    """
+    return patch.dict(vd.get_str_setting.__globals__["_runtime"], values, clear=True)
 
 
 def test_custom_drop_label_setting_is_honored(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
 
-    def fake_get_setting(key: str) -> str | None:
-        return "My Custom Drop" if key == "VID_DL_LABEL_DROP_1080" else None
-
     with (
         patch.object(vd, "enabled_heights", return_value=(1080,)),
-        patch.object(vd, "get_setting", side_effect=fake_get_setting),
+        _patch_settings(vd, {"VID_DL_LABEL_DROP_1080": "My Custom Drop"}),
     ):
         window._resolution_container = window._build_resolution_container()
 
@@ -705,13 +714,10 @@ def test_custom_button_label_setting_is_honored(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
 
-    def fake_get_setting(key: str) -> str | None:
-        # VID_DL_LABEL_BTN_PLAYLISTS is the legacy button-label key for 1080.
-        return "Custom Button" if key == "VID_DL_LABEL_BTN_PLAYLISTS" else None
-
+    # VID_DL_LABEL_BTN_PLAYLISTS is the legacy button-label key for 1080.
     with (
         patch.object(vd, "enabled_heights", return_value=(1080,)),
-        patch.object(vd, "get_setting", side_effect=fake_get_setting),
+        _patch_settings(vd, {"VID_DL_LABEL_BTN_PLAYLISTS": "Custom Button"}),
     ):
         window._resolution_container = window._build_resolution_container()
 
@@ -723,13 +729,10 @@ def test_custom_playlist_path_setting_is_honored(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
     custom_path = str(tmp_path / "custom.txt")
 
-    def fake_get_setting(key: str) -> str | None:
-        # VID_DL_PLAYLISTS_FILE is the legacy playlist-file key for 1080.
-        return custom_path if key == "VID_DL_PLAYLISTS_FILE" else None
-
+    # VID_DL_PLAYLISTS_FILE is the legacy playlist-file key for 1080.
     with (
         patch.object(vd, "enabled_heights", return_value=(1080,)),
-        patch.object(vd, "get_setting", side_effect=fake_get_setting),
+        _patch_settings(vd, {"VID_DL_PLAYLISTS_FILE": custom_path}),
     ):
         window._resolution_container = window._build_resolution_container()
 
@@ -743,7 +746,7 @@ def test_empty_string_setting_falls_back_to_default(tmp_path: Path) -> None:
 
     with (
         patch.object(vd, "enabled_heights", return_value=(1080,)),
-        patch.object(vd, "get_setting", return_value=""),
+        _patch_settings(vd, {"VID_DL_LABEL_DROP_1080": "", "VID_DL_LABEL_BTN_PLAYLISTS": ""}),
     ):
         window._resolution_container = window._build_resolution_container()
 
@@ -757,7 +760,7 @@ def test_drop_label_falls_through_to_env_var_when_setting_unset(
     """
     Verify the two-level fallback chain.
 
-    get_setting() returning None must still let the os.getenv fallback inside
+    An unset setting must still let the os.getenv fallback inside
     drop_label_for_height() win, before finally reaching the bare preset label.
     """
     vd = import_vid_module()
@@ -766,7 +769,7 @@ def test_drop_label_falls_through_to_env_var_when_setting_unset(
 
     with (
         patch.object(vd, "enabled_heights", return_value=(1080,)),
-        patch.object(vd, "get_setting", return_value=None),
+        _patch_settings(vd, {}),
     ):
         window._resolution_container = window._build_resolution_container()
 
@@ -782,7 +785,7 @@ def test_drop_label_falls_through_to_preset_label_when_nothing_set(
 
     with (
         patch.object(vd, "enabled_heights", return_value=(1080,)),
-        patch.object(vd, "get_setting", return_value=None),
+        _patch_settings(vd, {}),
     ):
         window._resolution_container = window._build_resolution_container()
 
@@ -809,7 +812,7 @@ def test_reload_settings_rebuild_runs_before_audio_label_apply(tmp_path: Path) -
 
     with (
         patch.object(vd, "enabled_heights", return_value=(2160,)),
-        patch.object(vd, "get_setting", return_value=None),
+        _patch_settings(vd, {}),
     ):
         window.reload_settings(
             {

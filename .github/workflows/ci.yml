@@ -82,3 +82,26 @@ jobs:
 
       - run: uv run --no-sync ruff check
       - run: uv run --no-sync ruff format --check
+
+  typecheck:
+    name: basedpyright
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      # Arbitrary, like the lint pin: the checked language level comes from
+      # [tool.basedpyright] pythonVersion in pyproject.toml, not from this interpreter.
+      UV_PYTHON: "3.14"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-suffix: typecheck
+
+      # Unlike the lint job this needs the full environment: without PyQt6, yt-dlp and
+      # genekit installed every import is unresolved and the baseline stops matching.
+      - name: Sync the locked dependency set
+        run: uv sync --locked --group dev
+
+      # Fails only on errors absent from .basedpyright/baseline.json.
+      - run: uv run --no-sync basedpyright

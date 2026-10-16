@@ -10,6 +10,7 @@ See [Developer Setup](README.md#developer-setup) in the README for cloning, inst
 
 - Follow the coding standards in `.claude/CLAUDE.md` — Ruff/PEP8, double quotes, type hints on all functions, list comprehensions preferred over manual loops, no unused imports.
 - Run `ruff check` and resolve any warnings before submitting.
+- Run `uv run basedpyright` and fix any new type errors (pre-existing ones are baselined in `.basedpyright/baseline.json`; don't add to it).
 - Add or update tests for any behavior change.
 - Keep PRs focused — one feature or fix per PR.
 

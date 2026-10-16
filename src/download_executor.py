@@ -10,7 +10,7 @@ from src.logging_utils import log_exception
 from .config import ENABLED_RESOLUTIONS, YDL_DOWNLOAD_ERRORS, YDL_EXTRACTION_ERRORS
 from .path_utils import rename_playlist_folders_from_comments
 from .resolutions import MAX_LADDER_DESCENT, height_from_source, lower_heights
-from .settings_dialog import get_setting
+from .settings_dialog import get_str_setting
 from .ydl_options import _build_video_format_selector
 from .ydl_utils import extract_playlist_info
 
@@ -143,7 +143,7 @@ class DownloadExecutor:
         """
 
         def _modify(opts: dict) -> dict:
-            vfmt = str(get_setting("VID_DL_VIDEO_FORMAT") or "mp4")
+            vfmt = get_str_setting("VID_DL_VIDEO_FORMAT", "mp4")
             fallback = opts.copy()
             fallback["format"] = _build_video_format_selector(height, vfmt)
             fallback.setdefault("merge_output_format", vfmt)

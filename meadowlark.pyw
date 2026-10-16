@@ -45,7 +45,6 @@ from functools import partial
 from os import startfile
 from pathlib import Path
 from typing import ClassVar
-from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 from hurry.filesize import size
@@ -141,8 +140,10 @@ from src.pending_queue import (
 from src.playlist_entry import playlist_entry_target
 from src.playlist_utils import (
     detect_site_from_urls,
-    get_playlist_file_for_source,
+    labels_by_playlist_id,
     load_playlist_comments_for_source,
+    load_playlist_entries_for_source,
+    playlist_id_for_line,
 )
 from src.podcast_filtering import (
     PODCAST_MIN_DURATION_SECONDS,
@@ -178,10 +179,11 @@ from src.settings_dialog import (
     _init_runtime_settings,
     _persist_setting,
     enabled_heights,
+    get_int_setting,
     get_setting,
+    get_str_setting,
 )
 from src.ui_classes import DropLabel, PlaylistButton, PlaylistDialog
-from src.url_utils import extract_playlist_id
 from src.version_utils import is_app_update_available, is_yt_dlp_update_available
 from src.window_geometry import GeometryMemoryDialog
 from src.ydl_options import (
@@ -284,7 +286,7 @@ def _label_from_comments(url: str, audio_pl_comments: dict) -> str | None:
     error paths (e.g. upcoming-premiere extraction failures) where yt-dlp
     ``info`` was never fetched.  Callers supply their own fallback via ``or``.
     """
-    pl_id = extract_playlist_id(url)
+    pl_id = playlist_id_for_line(url)
     if pl_id and pl_id in audio_pl_comments:
         return sanitize_for_path(audio_pl_comments[pl_id])
     return None
@@ -413,11 +415,11 @@ class MyWindow(QWidget):
             msg = f"Unregistered resolution height: {height}"
             raise ValueError(msg)
 
-        btn_label = get_setting(button_label_key(height)) or f"{preset.label} Playlists"
-        playlist_path = get_setting(playlist_file_key(height)) or str(
-            playlist_path_for_height(height)
+        btn_label = get_str_setting(button_label_key(height), f"{preset.label} Playlists")
+        playlist_path = get_str_setting(
+            playlist_file_key(height), str(playlist_path_for_height(height))
         )
-        button = PlaylistButton(str(btn_label), str(playlist_path))
+        button = PlaylistButton(btn_label, playlist_path)
         # Default-argument capture: a bare closure over `height` would make every
         # button route to the last rung built.
         button.clicked.connect(
@@ -427,9 +429,9 @@ class MyWindow(QWidget):
         )
         self._playlist_buttons[height] = button
 
-        drop_text = get_setting(drop_label_key(height)) or drop_label_for_height(height)
+        drop_text = get_str_setting(drop_label_key(height), drop_label_for_height(height))
         tile = DropLabel(
-            str(drop_text),
+            drop_text,
             preset.color,
             self.request_detected,
             source_key=source_key(height),
@@ -503,7 +505,7 @@ class MyWindow(QWidget):
         # Contrast fix on an existing colour: the orange background was too light
         # for the white text it effectively never had. Background hex unchanged.
         self.labelAudio = DropLabel(
-            str(get_setting("VID_DL_LABEL_DROP_AUDIO") or LABEL_DROP_AUDIO),
+            get_str_setting("VID_DL_LABEL_DROP_AUDIO", LABEL_DROP_AUDIO),
             "#FF9843",
             self.request_detected,
             source_key="audio",
@@ -593,30 +595,6 @@ class MyWindow(QWidget):
         app = QApplication.instance()
         if app:
             app.aboutToQuit.connect(self._shutdown_podcast_thread)
-
-    def _load_playlist_urls(self, source: str) -> list[dict[str, str]] | None:
-        """Load URLs and associated comments from playlist file for the given source, or return None."""
-        playlists_path = get_playlist_file_for_source(source)
-        if playlists_path:
-            try:
-                playlist_data = []
-                last_comment = None
-                with Path(playlists_path).open("r", encoding="utf-8") as file:
-                    for raw_line in file:
-                        line = raw_line.strip()
-                        if not line:
-                            continue
-                        if line.startswith("#"):
-                            last_comment = line[1:].strip()
-                        else:
-                            playlist_data.append({"url": line, "comment": last_comment})
-                            last_comment = None  # Reset for next URL
-            except FileNotFoundError:
-                print("File not found.")
-                return None
-            else:
-                return playlist_data
-        return None
 
     def _setup_podcast_check(self, urls: list, ydl_opts: dict) -> None:
         """Set up background podcast check for SponsorBlock info."""
@@ -783,17 +761,11 @@ class MyWindow(QWidget):
 
         # Load playlist URLs if applicable
         if not urls:  # Only load from file if no URLs provided (e.g., button press)
-            playlist_data = self._load_playlist_urls(source)
-            if playlist_data is not None:
-                urls = [item["url"] for item in playlist_data]
-                self.playlist_comments.clear()
-                for item in playlist_data:
-                    if item["comment"]:
-                        parsed = urlparse(item["url"])
-                        query = parse_qs(parsed.query)
-                        if "list" in query:
-                            pl_id = query["list"][0]
-                            self.playlist_comments[pl_id] = item["comment"]
+            entries = load_playlist_entries_for_source(source)
+            if entries is not None:
+                urls = [entry.url for entry in entries]
+                # Rebind, never .clear(): an earlier queued job's qmeta holds the old dict.
+                self.playlist_comments = labels_by_playlist_id(entries)
 
         properties = self.get_options(urls, source)
         if properties:
@@ -1671,7 +1643,7 @@ class MyWindow(QWidget):
             return
         # Remove-first is deliberate: a repeat failure re-adds the record with a
         # fresh timestamp via download_failed; a success leaves the list clean.
-        self._delete_failed_downloads([r.get("key") for r in runnable])
+        self._delete_failed_downloads([r["key"] for r in runnable])
         for record in runnable:
             self.handle_log_entry(
                 f"Retrying failed download: {record.get('title') or record['urls'][0]}"
@@ -1700,7 +1672,7 @@ class MyWindow(QWidget):
         except OSError as exc:
             log_exception(exc, "Failed to add videos to archive from Failed Downloads")
             return
-        self._delete_failed_downloads([r.get("key") for r, _ in marked])
+        self._delete_failed_downloads([r["key"] for r, _ in marked])
         for record, vid in marked:
             self.handle_log_entry(f"Marked as downloaded: {record.get('title') or vid}")
 
@@ -2386,9 +2358,7 @@ class MyWindow(QWidget):
             self._podcast_hour_timer.stop()
         auto = get_setting("VID_DL_PODCAST_AUTO_CHECK")
         if auto:
-            interval_min = int(
-                get_setting("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES") or 60
-            )
+            interval_min = get_int_setting("VID_DL_PODCAST_CHECK_INTERVAL_MINUTES", 60)
             self._podcast_hour_timer = QTimer(self)
             self._podcast_hour_timer.setInterval(interval_min * 60 * 1000)
             self._podcast_hour_timer.timeout.connect(self._hourly_podcast_check)

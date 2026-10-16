@@ -4,12 +4,8 @@ Boundary tests for _try_720_fallback format-string propagation.
 Covers every cell in the boundary matrix for the VID_DL_VIDEO_FORMAT /
 VID_DL_AUDIO_FORMAT settings path through _modify() inside _try_720_fallback.
 
-Patch target: src.download_executor.get_setting
-  — get_setting is bound by name into the module, so patching the attribute
-    on the module object (not settings_dialog._runtime) is the right approach.
-    Either patch.dict(sd._runtime, ...) or patch("src.download_executor.get_setting")
-    work; we prefer patch() here so these tests don't depend on the internal
-    _runtime storage structure changing.
+Settings are injected into the runtime store (settings_dialog._runtime), so the
+real get_str_setting fallback (None/"" -> default) is exercised end to end.
 """
 
 from typing import Any
@@ -17,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import src.settings_dialog as sd
 from src.download_executor import DownloadExecutor
 
 # ---------------------------------------------------------------------------
@@ -37,16 +34,8 @@ def _make_executor() -> DownloadExecutor:
 
 
 def _patch_get_setting(vfmt: object, afmt: object):  # type: ignore[return]
-    """Patch src.download_executor.get_setting to return vfmt/afmt for format keys."""
-
-    def _fake_get_setting(key: str) -> object:
-        if key == "VID_DL_VIDEO_FORMAT":
-            return vfmt
-        if key == "VID_DL_AUDIO_FORMAT":
-            return afmt
-        return None
-
-    return patch("src.download_executor.get_setting", side_effect=_fake_get_setting)
+    """Seed the runtime store with vfmt/afmt for the two format keys."""
+    return patch.dict(sd._runtime, {"VID_DL_VIDEO_FORMAT": vfmt, "VID_DL_AUDIO_FORMAT": afmt})
 
 
 def _run_fallback_and_capture_options(vfmt: object, afmt: object, base_opts: dict) -> dict:
@@ -404,7 +393,7 @@ class TestLiveSettingRead:
         """Verify get_setting is invoked when the download attempt fires, not earlier."""
         call_log: list[str] = []
 
-        def _tracking_get_setting(key: str) -> str:
+        def _tracking_get_setting(key: str, _default: str = "") -> str:
             call_log.append(key)
             if key == "VID_DL_VIDEO_FORMAT":
                 return "flac"  # deliberately unusual value
@@ -414,7 +403,7 @@ class TestLiveSettingRead:
 
         with (
             patch(
-                "src.download_executor.get_setting",
+                "src.download_executor.get_str_setting",
                 side_effect=_tracking_get_setting,
             ),
             patch("src.download_executor.YoutubeDL") as mock_ydl_class,

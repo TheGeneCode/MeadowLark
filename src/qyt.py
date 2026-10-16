@@ -155,7 +155,7 @@ class QHook(QObject):
 
     info_changed = pyqtSignal(dict)
 
-    def __init__(self, parent: QObject = None) -> None:
+    def __init__(self, parent: QObject | None = None) -> None:
         """
         Initialize the QHook object.
 
