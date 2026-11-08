@@ -8,8 +8,9 @@ app ships a ``licenses`` folder generated from the exact packages it contains:
         --ffmpeg-root ffmpeg_tmp --ffmpeg-asset ffmpeg-...-win64-gpl-....zip
 
 Sources walked:
-    python  the runtime dependency closure of ``--root-dist`` (``importlib.metadata``),
-            following only requirements whose markers apply with no extras selected
+    python  the runtime dependency closure of ``--pyproject``'s ``[project] dependencies``
+            (resolved via ``importlib.metadata``), following only requirements whose
+            markers apply with no extras selected
     npm     every package in the Deno npm store (``<npm-root>/.deno/<name>@<version>``)
             that ``deno install`` produced for the vendored bgutil PO-token server
     binary  the FFmpeg build (``LICENSE*`` under ``--ffmpeg-root``) and the CPython
@@ -40,6 +41,7 @@ import platform
 import re
 import shutil
 import sys
+import tomllib
 from collections import deque
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -97,21 +99,39 @@ def _normalize(name: str) -> str:
 # --------------------------------------------------------------------------- python
 
 
-def python_closure(root: str) -> list[importlib.metadata.Distribution]:
+def project_requirements(pyproject: Path) -> tuple[str, list[str]]:
     """
-    Return the installed runtime dependency closure of ``root`` (``root`` excluded).
+    Return ``(name, dependencies)`` from the ``[project]`` table of ``pyproject``.
+
+    Read from the file, not ``importlib.metadata``: uv syncs this project as a virtual
+    (never-installed) root, so it has no dist metadata — and a stray ``*.egg-info`` in the
+    checkout would supply a stale dependency list. Raises ``ValueError`` when the table or
+    its ``name`` is missing.
+    """
+    with pyproject.open("rb") as fh:
+        project: dict[str, Any] = tomllib.load(fh).get("project", {})
+    name = project.get("name")
+    if not name:
+        msg = f"{pyproject} has no [project] name"
+        raise ValueError(msg)
+    return str(name), [str(spec) for spec in project.get("dependencies", [])]
+
+
+def python_closure(
+    root_name: str, root_requires: Iterable[str]
+) -> list[importlib.metadata.Distribution]:
+    """
+    Return the installed runtime dependency closure of ``root_requires`` (root excluded).
 
     Breadth-first over ``Requires-Dist``. A requirement whose marker does not hold with no
     extras selected (extras-only or wrong-platform) is skipped before lookup; an applicable
     requirement that is not installed raises ``PackageNotFoundError``.
     """
-    root_dist = importlib.metadata.distribution(root)
-    seen: set[str] = {_normalize(root_dist.name)}
-    queue: deque[importlib.metadata.Distribution] = deque([root_dist])
+    seen: set[str] = {_normalize(root_name)}
+    pending: deque[Iterable[str]] = deque([root_requires])
     closure: list[importlib.metadata.Distribution] = []
-    while queue:
-        dist = queue.popleft()
-        for spec in dist.requires or []:
+    while pending:
+        for spec in pending.popleft():
             req = Requirement(spec)
             if req.marker is not None and not req.marker.evaluate({"extra": ""}):
                 continue
@@ -121,7 +141,7 @@ def python_closure(root: str) -> list[importlib.metadata.Distribution]:
             seen.add(key)
             dep = importlib.metadata.distribution(req.name)
             closure.append(dep)
-            queue.append(dep)
+            pending.append(dep.requires or [])
     return closure
 
 
@@ -440,9 +460,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="FFmpeg release zip filename; its -g<sha>- segment gives the source commit link.",
     )
     parser.add_argument(
-        "--root-dist",
-        default="meadowlark",
-        help="Distribution whose runtime dependency closure is collected (default: meadowlark).",
+        "--pyproject",
+        type=Path,
+        default=_REPO_ROOT / "pyproject.toml",
+        help="pyproject.toml whose [project] dependencies seed the Python closure "
+        "(default: the repo's).",
     )
     return parser.parse_args(argv)
 
@@ -463,12 +485,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        components = [python_component(dist) for dist in python_closure(args.root_dist)]
+        root_name, root_requires = project_requirements(args.pyproject)
+        components = [python_component(d) for d in python_closure(root_name, root_requires)]
         components.extend(npm_components(args.npm_root))
     except importlib.metadata.PackageNotFoundError as exc:
         print(f"error: required distribution not installed: {exc}", file=sys.stderr)
         return 1
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
