@@ -26,7 +26,10 @@ a = Analysis(
         "yt_dlp_plugins.extractor.getpot_bgutil",
         "yt_dlp_plugins.extractor.getpot_bgutil_http",
         "yt_dlp_plugins.extractor.getpot_bgutil_script",
-        "wakepy._implementations",
+        # wakepy registers its keep-awake methods dynamically, so PyInstaller cannot trace them.
+        # Collect the whole package: 1.0 moved them from `_implementations` to `methods`, and a
+        # stale name only warns at build time while the frozen app silently stops keeping awake.
+        *collect_submodules("wakepy"),
     ],
     hookspath=[],
     runtime_hooks=[],

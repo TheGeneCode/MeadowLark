@@ -11,6 +11,7 @@ uv.lock, and the properties are all visible as plain lines.
 """
 
 import ast
+import importlib.util
 import re
 from pathlib import Path
 
@@ -253,3 +254,33 @@ def test_spec_helper_detects_broader_resource_bundles(
     fake.write_text(f"datas = [{bad_source}, ('resources/icons', 'resources/icons')]\n")
     monkeypatch.setattr(f"{__name__}._SPEC", fake)
     assert _spec_resource_sources() != ["resources/icons"]
+
+
+def _spec_hidden_import_names() -> list[str]:
+    """Return the spec's `hiddenimports=` names: literals and `collect_submodules` args."""
+    tree = ast.parse(_SPEC.read_text(encoding="utf-8"))
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.keyword) and node.arg == "hiddenimports"):
+            continue
+        assert isinstance(node.value, ast.List), "hiddenimports is no longer a list literal"
+        for elt in node.value.elts:
+            target = elt.value if isinstance(elt, ast.Starred) else elt
+            if isinstance(target, ast.Call) and target.args:
+                target = target.args[0]
+            if isinstance(target, ast.Constant) and isinstance(target.value, str):
+                names.append(target.value)
+    return names
+
+
+def test_every_spec_hidden_import_resolves() -> None:
+    """
+    A stale hidden import only warns at build time, then the frozen app lacks the module.
+
+    wakepy 1.0 moved its dynamically-registered methods out of `_implementations`;
+    the old name would have shipped an exe that silently stopped keeping the PC awake.
+    """
+    names = _spec_hidden_import_names()
+    assert "wakepy" in names, "spec parsing found no hidden imports; the guard is blind"
+    missing = [name for name in names if importlib.util.find_spec(name) is None]
+    assert not missing, f"hiddenimports name modules that do not exist: {missing}"
