@@ -22,12 +22,12 @@ updates:
     open-pull-requests-limit: 2
     commit-message:
       prefix: "deps"
+    # bgutil is excluded from the group: the plugin must move with the vendored server
+    # (vendor/bgutil-pot-provider/), which Dependabot cannot do, so its bump comes as a
+    # PR of its own that tests/test_pot_provider_pin.py turns red. Do the vendor move on
+    # that PR's branch (see "Updating the pin" in its README); the rest of the group
+    # stays mergeable.
     groups:
       python:
         patterns: ["*"]
-    # The plugin hard-fails on a major mismatch with the vendored server script
-    # (vendor/bgutil-pot-provider/), so a major bump must move both together by hand
-    # (see "Updating the pin" in its README). Drop this ignore once that upgrade lands.
-    ignore:
-      - dependency-name: "bgutil-ytdlp-pot-provider"
-        update-types: ["version-update:semver-major"]
+        exclude-patterns: ["bgutil-ytdlp-pot-provider"]

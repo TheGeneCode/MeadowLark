@@ -397,7 +397,7 @@ On launch MeadowLark probes the provider and, if anything is missing, shows a **
 | Component | Where |
 |---|---|
 | Provider plugin | importable `yt_dlp_plugins.extractor.getpot_bgutil_script` (from `uv sync`) |
-| Deno runtime ≥ 2.0 | `deno.exe` in `.venv/Scripts` (from `uv sync`) |
+| Deno runtime ≥ 2.4.3 | `deno.exe` in `.venv/Scripts` (from `uv sync`) |
 | Generate script | `{server_home}/src/generate_once.ts` |
 | Script dependencies | `{server_home}/node_modules` |
 

@@ -25,10 +25,10 @@ from pathlib import Path
 from .config import POT_PROVIDER_SERVER_HOME, VENV_SCRIPTS_DIR
 
 # Mirror BgUtilScriptDenoPTP: script at {server_home}/src/generate_once.ts, deps
-# under {server_home}/node_modules, Deno >= 2.0.0.
+# under {server_home}/node_modules, Deno >= 2.4.3 (_JSRT_MIN_VER, plugin 2.0.2).
 _SCRIPT_RELPATH: tuple[str, ...] = ("src", "generate_once.ts")
 _NODE_MODULES = "node_modules"
-_DENO_MIN_VERSION = (2, 0, 0)
+_DENO_MIN_VERSION = (2, 4, 3)
 _DENO_VERSION_TIMEOUT_S = 5.0
 _DENO_VERSION_RE = re.compile(r"deno\s+(\d+)\.(\d+)\.(\d+)")
 
@@ -71,7 +71,7 @@ class PotProviderStatus:
         if not self.plugin_installed:
             missing.append("provider plugin (bgutil-ytdlp-pot-provider)")
         if not self.deno_ok:
-            missing.append("Deno runtime (>= 2.0)")
+            missing.append(f"Deno runtime (>= {'.'.join(map(str, _DENO_MIN_VERSION))})")
         if not self.script_found:
             missing.append("generate_once.ts script")
         if not self.node_modules_found:
@@ -102,7 +102,7 @@ def _plugin_importable() -> bool:
 
 
 def _deno_ok(scripts_dir: Path) -> bool:
-    """Return True if deno.exe exists in ``scripts_dir`` and reports version >= 2.0.0."""
+    """Return True if ``scripts_dir`` has a deno.exe at version >= ``_DENO_MIN_VERSION``."""
     deno = scripts_dir / "deno.exe"
     if not deno.is_file():
         return False
@@ -171,7 +171,14 @@ def _script_cache_dir(server_home: Path) -> Path:
 
 
 def build_warm_cmd(deno: str | Path, server_home: Path) -> list[str]:
-    """Return the exact argv BgUtilScriptDenoPTP uses for its version probe."""
+    """
+    Return the exact argv BgUtilScriptDenoPTP uses for its version probe.
+
+    Mirrors plugin 2.x ``_resolve_script_path``, which realpath-resolves
+    ``server_home``; the warm-up must cache the same file paths the probe loads,
+    or it silently fails to warm the probe.
+    """
+    server_home = Path(os.path.realpath(server_home))
     node_mods = server_home / _NODE_MODULES
     cache = _script_cache_dir(server_home)
     return [

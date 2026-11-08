@@ -1,23 +1,47 @@
 import axios, { AxiosRequestConfig } from "axios";
 import {
-    BG,
-    BgConfig,
-    DescrambledChallenge,
-    WebPoSignalOutput,
-    FetchFunction,
     buildURL,
     getHeaders,
+    parseLooseJSON,
     USER_AGENT,
-} from "bgutils-js";
+} from "bgutils-js/utils";
+import type {
+    IBotguardClientSideBgChallenge,
+    WebPoSignalOutput,
+} from "bgutils-js/shared-types";
+import { BotGuardClient } from "bgutils-js/botguard";
+import { WebPoMinter } from "bgutils-js/webpo";
 import { Agent } from "node:https";
 import { ProxyAgent } from "proxy-agent";
 import { JSDOM } from "jsdom";
 import { Innertube, Context as InnertubeContext } from "youtubei.js";
 
+interface PotContext {
+    fetch: typeof fetch;
+    globalObj: typeof globalThis;
+}
+
 interface YoutubeSessionData {
     poToken: string;
     contentBinding: string;
     expiresAt: Date;
+}
+
+const SUPPORTED_PROXY_PROTOCOLS = new Set([
+    "http:",
+    "https:",
+    "socks:",
+    "socks4:",
+    "socks4a:",
+    "socks5:",
+    "socks5h:",
+]);
+
+export class InvalidProxyError extends Error {
+    constructor(message: string, options?: ErrorOptions) {
+        super(message, options);
+        this.name = "InvalidProxyError";
+    }
 }
 
 export interface YoutubeSessionDataCaches {
@@ -72,18 +96,26 @@ class ProxySpec {
     public set proxy(newProxy: string | undefined) {
         if (newProxy) {
             // Normalize and sanitize the proxy URL
+            let proxyUrl: URL;
             try {
-                this.proxyUrl = new URL(newProxy);
+                proxyUrl = new URL(newProxy);
             } catch {
                 newProxy = `http://${newProxy}`;
                 try {
-                    this.proxyUrl = new URL(newProxy);
+                    proxyUrl = new URL(newProxy);
                 } catch (e) {
-                    throw new Error(`Invalid proxy URL: ${newProxy}`, {
-                        cause: e,
-                    });
+                    throw new InvalidProxyError(
+                        `Invalid proxy URL: ${newProxy}`,
+                        { cause: e },
+                    );
                 }
             }
+            if (!SUPPORTED_PROXY_PROTOCOLS.has(proxyUrl.protocol)) {
+                throw new InvalidProxyError(
+                    `Unsupported proxy protocol: ${proxyUrl.protocol}`,
+                );
+            }
+            this.proxyUrl = proxyUrl;
         }
     }
 
@@ -138,7 +170,7 @@ class CacheSpec {
 type TokenMinter = {
     expiry: Date;
     integrityToken: string;
-    minter: BG.WebPoMinter;
+    minter: WebPoMinter;
 };
 
 type MinterCache = Map<string, TokenMinter>;
@@ -176,7 +208,7 @@ export class SessionManager {
                 {
                     url: "https://www.youtube.com/",
                     referrer: "https://www.youtube.com/",
-                    userAgent: USER_AGENT,
+                    resources: { userAgent: USER_AGENT },
                 },
             );
 
@@ -230,15 +262,79 @@ export class SessionManager {
         return this._minterCache;
     }
 
+    // PATCH(unstem 2026-08): fetch the YT homepage (through the caller's
+    // proxy) and extract a self-consistent (ytcfg, ytAtN challenge) pair.
+    // Injects yt.config_ into the BotGuard global object so the snapshot
+    // sees EVENT_ID. Returns undefined on any failure (caller falls back).
+    private async getChallengeFromHomepage(
+        potCtx: PotContext,
+    ): Promise<ChallengeData | undefined> {
+        try {
+            const pageResponse = await potCtx.fetch("https://www.youtube.com", {
+                method: "GET",
+                headers: {
+                    accept: "*/*",
+                    "accept-language": "en-US,en;q=0.7",
+                    "user-agent": USER_AGENT,
+                },
+            });
+            const pageHtml: string = await pageResponse.text();
+
+            const ytcfgMatch = pageHtml.match(/ytcfg\.set\(({.+?})\);/s);
+            if (ytcfgMatch) {
+                const ytObj = { config_: JSON.parse(ytcfgMatch[1] as string) };
+                const g: any = globalThis as any;
+                g.yt = ytObj; // BotGuard reads yt.config_.EVENT_ID
+                if (g.window) g.window.yt = ytObj;
+            } else {
+                this.logger.warn(
+                    "homepage-challenge: no ytcfg found (EVENT_ID missing)",
+                );
+            }
+
+            const attMatch = pageHtml.match(
+                /window\.ytAtN\(\s*({[\s\S]*?})\s*\)/,
+            );
+            if (!attMatch) {
+                this.logger.warn(
+                    "homepage-challenge: no ytAtN challenge in page",
+                );
+                return undefined;
+            }
+            const attData: any = parseLooseJSON(attMatch[1] as string);
+            const bgChallenge = attData?.R?.bgChallenge;
+            if (!bgChallenge?.program || !bgChallenge?.interpreterUrl) {
+                this.logger.warn(
+                    "homepage-challenge: ytAtN payload missing bgChallenge",
+                );
+                return undefined;
+            }
+            this.logger.debug("Using challenge from the homepage (patched)");
+            return bgChallenge as ChallengeData;
+        } catch (e) {
+            this.logger.warn(
+                `homepage-challenge: failed (${e?.message}), falling back`,
+            );
+            return undefined;
+        }
+    }
+
     private async getDescrambledChallenge(
-        bgConfig: BgConfig,
+        potCtx: PotContext,
         challenge?: ChallengeData,
         innertubeContext?: InnertubeContext,
-    ): Promise<DescrambledChallenge> {
+    ): Promise<IBotguardClientSideBgChallenge> {
         try {
+            // PATCH(unstem 2026-08): always mint from the homepage's
+            // (ytcfg, ytAtN) pair — plugin-passed challenges lack their
+            // page's ytcfg/EVENT_ID and /att/get tokens are rejected.
+            challenge =
+                (await this.getChallengeFromHomepage(potCtx)) ?? challenge;
             if (!challenge) {
-                this.logger.debug("Using challenge from /att/get");
-                const attGetResponse = await bgConfig.fetch(
+                this.logger.debug(
+                    "Using challenge from /att/get (legacy fallback)",
+                );
+                const attGetResponse = await potCtx.fetch(
                     "https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false",
                     {
                         method: "POST",
@@ -250,7 +346,7 @@ export class SessionManager {
                             context: innertubeContext || {
                                 client: {
                                     clientName: "WEB",
-                                    clientVersion: "2.20260227.01.00",
+                                    clientVersion: "2.20260817.01.00",
                                 },
                             },
                             engagementType: "ENGAGEMENT_TYPE_UNBOUND",
@@ -267,7 +363,7 @@ export class SessionManager {
             const { program, globalName, interpreterHash } = challenge;
             const { privateDoNotAccessOrElseTrustedResourceUrlWrappedValue } =
                 challenge.interpreterUrl;
-            const interpreterJSResponse = await bgConfig.fetch(
+            const interpreterJSResponse = await potCtx.fetch(
                 `https:${privateDoNotAccessOrElseTrustedResourceUrlWrappedValue}`,
             );
             const interpreterJS = await interpreterJSResponse.text();
@@ -278,6 +374,8 @@ export class SessionManager {
                 interpreterJavascript: {
                     privateDoNotAccessOrElseSafeScriptWrappedValue:
                         interpreterJS,
+                },
+                interpreterUrl: {
                     privateDoNotAccessOrElseTrustedResourceUrlWrappedValue,
                 },
             };
@@ -288,12 +386,12 @@ export class SessionManager {
 
     private async generateTokenMinter(
         cacheSpec: CacheSpec,
-        bgConfig: BgConfig,
+        potCtx: PotContext,
         challenge?: ChallengeData,
         innertubeContext?: InnertubeContext,
     ): Promise<TokenMinter> {
         const descrambledChallenge = await this.getDescrambledChallenge(
-            bgConfig,
+            potCtx,
             challenge,
             innertubeContext,
         );
@@ -301,18 +399,18 @@ export class SessionManager {
         const { program, globalName } = descrambledChallenge;
         const interpreterJavascript =
             descrambledChallenge.interpreterJavascript
-                .privateDoNotAccessOrElseSafeScriptWrappedValue;
+                ?.privateDoNotAccessOrElseSafeScriptWrappedValue;
 
         if (interpreterJavascript) {
             new Function(interpreterJavascript)();
         } else throw new Error("Could not load VM");
 
-        let bgClient: BG.BotGuardClient;
+        let bgClient: BotGuardClient;
         try {
-            bgClient = await BG.BotGuardClient.create({
+            bgClient = await BotGuardClient.create({
                 program,
                 globalName,
-                globalObj: bgConfig.globalObj,
+                globalObject: potCtx.globalObj,
             });
         } catch (e) {
             throw new Error(`Failed to create BG client.`, { cause: e });
@@ -322,7 +420,7 @@ export class SessionManager {
             const botguardResponse = await bgClient.snapshot({
                 webPoSignalOutput,
             });
-            const integrityTokenResp = await bgConfig.fetch(
+            const integrityTokenResp = await potCtx.fetch(
                 buildURL("GenerateIT"),
                 {
                     method: "POST",
@@ -364,7 +462,7 @@ export class SessionManager {
             const tokenMinter: TokenMinter = {
                 expiry: new Date(Date.now() + estimatedTtlSecs * 1000),
                 integrityToken,
-                minter: await BG.WebPoMinter.create(
+                minter: await WebPoMinter.create(
                     integrityTokenData,
                     webPoSignalOutput,
                 ),
@@ -412,7 +510,7 @@ export class SessionManager {
         proxySpec: ProxySpec,
         maxRetries: number,
         intervalMs: number,
-    ): FetchFunction {
+    ): PotContext["fetch"] {
         const { logger } = this;
         return async (url: any, options: any): Promise<any> => {
             const method = (options?.method || "GET").toUpperCase();
@@ -422,6 +520,7 @@ export class SessionManager {
                         headers: options?.headers,
                         params: options?.params,
                         httpsAgent: proxySpec.asDispatcher(logger),
+                        proxy: false,
                     };
                     const response = await (method === "GET"
                         ? axios.get(url, axiosOpt)
@@ -503,11 +602,9 @@ export class SessionManager {
 
         if (!innertubeContext) innertubeContext = innertube?.session.context;
 
-        const bgConfig: BgConfig = {
+        const potCtx: PotContext = {
             fetch: bgFetch,
             globalObj: globalThis,
-            identifier: contentBinding,
-            requestKey: SessionManager.REQUEST_KEY,
         };
 
         if (!bypassCache) {
@@ -528,7 +625,7 @@ export class SessionManager {
                     this.logger.log("POT minter expired, getting a new one");
                     tokenMinter = await this.generateTokenMinter(
                         cacheSpec,
-                        bgConfig,
+                        potCtx,
                         challenge,
                         innertubeContext,
                     );
@@ -539,7 +636,7 @@ export class SessionManager {
 
         const tokenMinter = await this.generateTokenMinter(
             cacheSpec,
-            bgConfig,
+            potCtx,
             challenge,
             innertubeContext,
         );
