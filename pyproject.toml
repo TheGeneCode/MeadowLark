@@ -1,6 +1,6 @@
 [project]
 name = "meadowlark"
-version = "0.4.7"
+version = "0.4.8"
 description = "Desktop app for downloading videos, playlists, and podcasts from YouTube and other sites, built on yt-dlp"
 readme = "README.md"
 requires-python = ">=3.11"
