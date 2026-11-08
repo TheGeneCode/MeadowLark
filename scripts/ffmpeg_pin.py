@@ -25,6 +25,7 @@ Usage::
     uv run python scripts/ffmpeg_pin.py check [--branch X.Y]  # decision as JSON
     uv run python scripts/ffmpeg_pin.py apply                 # pin from FFMPEG_* env vars
     uv run python scripts/ffmpeg_pin.py fetch --dest DIR      # download, verify, extract
+                                       [--license-dest DIR]   # ...and keep the zip's LICENSE.txt
     uv run python scripts/ffmpeg_pin.py pr-body               # bump-PR body from env vars
 
 ``--pin-file PATH`` (before the subcommand) points every command at another file.
@@ -69,6 +70,7 @@ _CHECKSUMS_ASSET = "checksums.sha256"
 _HTTP_TIMEOUT_S = 60
 _CHUNK = 1024 * 1024
 _BINARIES = ("ffmpeg.exe", "ffprobe.exe")
+_LICENSE_NAME = "LICENSE.txt"
 _PIN_KEYS = ("FFMPEG_TAG", "FFMPEG_ASSET", "FFMPEG_SHA256")
 
 _TAG = re.compile(r"^autobuild-(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}\Z")
@@ -455,16 +457,32 @@ def _binary_members(zf: zipfile.ZipFile, asset: str) -> dict[str, zipfile.ZipInf
     return {name: members[0] for name, members in found.items()}
 
 
-def fetch(pin: Pin, dest: Path) -> None:
+def _license_member(zf: zipfile.ZipFile, asset: str) -> zipfile.ZipInfo:
+    """Return the single top-level-folder ``LICENSE.txt`` member (the build's GPL text)."""
+    found = []
+    for info in zf.infolist():
+        parts = info.filename.replace("\\", "/").split("/")
+        if not info.is_dir() and len(parts) == 2 and parts[1] == _LICENSE_NAME:
+            found.append(info)
+    if len(found) != 1:
+        msg = f"{asset} must contain exactly one top-level {_LICENSE_NAME} (found {len(found)})"
+        raise PinError(msg)
+    return found[0]
+
+
+def fetch(pin: Pin, dest: Path, license_dest: Path | None = None) -> None:
     """
     Download ``pin``'s zip, verify its SHA256 and extract only ``ffmpeg.exe``/``ffprobe.exe``.
 
     Members are written by basename via ``ZipFile.open`` (never ``extractall``), so a crafted
     member path cannot escape ``dest``. Both binaries are staged in a temp directory first, so
-    ``dest`` (created if missing) gains nothing on any :class:`PinError`.
+    ``dest`` (created if missing) gains nothing on any :class:`PinError`. With ``license_dest``,
+    the archive's top-level ``LICENSE.txt`` is also written there (the GPL text the installer
+    must ship alongside the binaries); it is staged and validated the same way.
 
     Raises:
-        PinError: Download failure, hash mismatch, or not exactly one of each binary.
+        PinError: Download failure, hash mismatch, not exactly one of each binary, or (with
+            ``license_dest``) not exactly one top-level ``LICENSE.txt``.
     """
     data = _get(_download_url(pin))
     with tempfile.TemporaryDirectory(prefix="ffmpeg_pin_") as tmp:
@@ -484,7 +502,10 @@ def fetch(pin: Pin, dest: Path) -> None:
 
         try:
             with zipfile.ZipFile(archive) as zf:
-                for name, info in _binary_members(zf, pin.asset).items():
+                members = _binary_members(zf, pin.asset)
+                if license_dest is not None:
+                    members[_LICENSE_NAME] = _license_member(zf, pin.asset)
+                for name, info in members.items():
                     with zf.open(info) as src, (staging / name).open("wb") as dst:
                         shutil.copyfileobj(src, dst, _CHUNK)
         except zipfile.BadZipFile as exc:
@@ -494,6 +515,9 @@ def fetch(pin: Pin, dest: Path) -> None:
         dest.mkdir(parents=True, exist_ok=True)
         for name in _BINARIES:
             shutil.move(staging / name, dest / name)
+        if license_dest is not None:
+            license_dest.mkdir(parents=True, exist_ok=True)
+            shutil.move(staging / _LICENSE_NAME, license_dest / _LICENSE_NAME)
 
 
 def _read_text(path: Path) -> str:
@@ -590,10 +614,12 @@ def _cmd_apply(pin_file: Path) -> None:
     print(f"{pin_file}: pinned FFmpeg {version_label(pin.asset)} ({pin.tag})")
 
 
-def _cmd_fetch(pin_file: Path, dest: Path) -> None:
+def _cmd_fetch(pin_file: Path, dest: Path, license_dest: Path | None) -> None:
     pin = parse_pin(_read_text(pin_file))
-    fetch(pin, dest)
+    fetch(pin, dest, license_dest)
     print(f"FFmpeg {version_label(pin.asset)} verified; {', '.join(_BINARIES)} -> {dest}")
+    if license_dest is not None:
+        print(f"{_LICENSE_NAME} -> {license_dest}")
 
 
 def _cmd_pr_body() -> None:
@@ -636,6 +662,11 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("apply", help="rewrite the pin from FFMPEG_TAG/ASSET/SHA256 env vars")
     fetch_cmd = commands.add_parser("fetch", help="download, verify and extract the pinned build")
     fetch_cmd.add_argument("--dest", type=Path, required=True, help="directory for the binaries")
+    fetch_cmd.add_argument(
+        "--license-dest",
+        type=Path,
+        help="also extract the build's LICENSE.txt into this directory",
+    )
     commands.add_parser("pr-body", help="print the bump-PR body from env vars")
     return parser
 
@@ -650,7 +681,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "apply":
             _cmd_apply(pin_file)
         elif args.command == "fetch":
-            _cmd_fetch(pin_file, args.dest)
+            _cmd_fetch(pin_file, args.dest, args.license_dest)
         else:
             _cmd_pr_body()
     except PinError as exc:

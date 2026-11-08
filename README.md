@@ -483,3 +483,7 @@ Advanced users can override defaults by editing the `.env` file in `AppData\Roam
 | `VID_DL_YT_PLAYER_CLIENT` | `web_embedded` | YouTube player clients, comma-separated in priority order. See [the ~1 MB cutoff](#the-token-is-necessary-but-not-sufficient-the-1-mb-cutoff) before changing this — most clients now 403 mid-transfer or expose no downloadable formats. |
 | `VID_DL_YTDLP_VERBOSE` | `false` | Capture yt-dlp's verbose output for diagnosing 403s. Contains PO tokens and signed URLs — leave off unless debugging. |
 | `VID_DL_YTDLP_DEBUG_LOG` | `resources/ytdlp_debug.log` | Where that capture is written (rotating, 5 MB × 2 backups) |
+
+## License
+
+MeadowLark is released under the GPL-3.0 license (see [LICENSE](LICENSE)). Bundled third-party components and their licenses: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

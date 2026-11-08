@@ -352,6 +352,67 @@ def test_fetch_replaces_stale_binaries_but_a_failed_fetch_leaves_them(
     assert (dest / "ffprobe.exe").read_bytes() == b"NEW-PR"
 
 
+_BINARY_MEMBERS = {"x/bin/ffmpeg.exe": b"FF", "x/bin/ffprobe.exe": b"PR"}
+
+
+def test_fetch_license_dest_receives_only_the_top_level_license(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pin = _serve(
+        monkeypatch,
+        mod,
+        _zip_bytes({**_BINARY_MEMBERS, "x/LICENSE.txt": b"GPL", "x/doc/LICENSE.txt": b"nested"}),
+    )
+    mod.fetch(pin, tmp_path / "dest", tmp_path / "lic")
+    assert {p.name: p.read_bytes() for p in (tmp_path / "lic").iterdir()} == {"LICENSE.txt": b"GPL"}
+    assert {p.name for p in (tmp_path / "dest").iterdir()} == {"ffmpeg.exe", "ffprobe.exe"}
+
+
+def test_fetch_without_license_dest_ignores_a_missing_license(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pin = _serve(monkeypatch, mod, _zip_bytes(_BINARY_MEMBERS))
+    mod.fetch(pin, tmp_path / "dest")
+    assert {p.name for p in (tmp_path / "dest").iterdir()} == {"ffmpeg.exe", "ffprobe.exe"}
+
+
+def test_fetch_license_dest_requires_exactly_one_license_and_stages_nothing(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pin = _serve(monkeypatch, mod, _zip_bytes(_BINARY_MEMBERS))
+    with pytest.raises(mod.PinError, match=r"top-level LICENSE\.txt"):
+        mod.fetch(pin, tmp_path / "dest", tmp_path / "lic")
+    assert not (tmp_path / "dest").exists()
+    assert not (tmp_path / "lic").exists()
+
+
+def test_fetch_license_dest_rejects_two_top_level_licenses(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pin = _serve(
+        monkeypatch,
+        mod,
+        _zip_bytes({**_BINARY_MEMBERS, "x/LICENSE.txt": b"one", "y/LICENSE.txt": b"two"}),
+    )
+    with pytest.raises(mod.PinError, match=r"exactly one top-level LICENSE\.txt \(found 2\)"):
+        mod.fetch(pin, tmp_path / "dest", tmp_path / "lic")
+    assert not (tmp_path / "dest").exists()
+    assert not (tmp_path / "lic").exists()
+
+
+def test_fetch_command_license_dest_flag_reaches_fetch(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    data = _zip_bytes({**_BINARY_MEMBERS, "x/LICENSE.txt": b"GPL"})
+    monkeypatch.setattr(mod, "_get", lambda _url: data)
+    pin_file = tmp_path / "ffmpeg-pin.yml"
+    pin = mod.Pin(_TAG_PIN, _ASSET_9, hashlib.sha256(data).hexdigest())
+    pin_file.write_text(mod.render_pin(_real_text(), pin), encoding="utf-8", newline="")
+    argv = ["--pin-file", str(pin_file), "fetch", "--dest", str(tmp_path / "d")]
+    assert mod.main([*argv, "--license-dest", str(tmp_path / "lic")]) == 0
+    assert (tmp_path / "lic" / "LICENSE.txt").read_bytes() == b"GPL"
+
+
 # --- _get -------------------------------------------------------------------------------------
 
 

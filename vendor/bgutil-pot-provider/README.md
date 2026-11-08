@@ -8,6 +8,7 @@ for 1080p+ downloads (yt-dlp #12482).
 - **Upstream:** https://github.com/Brainicism/bgutil-ytdlp-pot-provider
 - **Pinned tag:** `1.3.1` — must match the `bgutil-ytdlp-pot-provider` version pinned in
   `pyproject.toml` / `uv.lock` (the plugin's `_check_version` hard-fails on a major mismatch).
+- **License:** GPL-3.0 — see [LICENSE](LICENSE) (copied verbatim from upstream at the pinned tag).
 
 Only the text source is vendored (`src/`, `deno.lock`, `package.json`, `package-lock.json`,
 `tsconfig.json`, etc.). The installed `node_modules/` is **generated**, not committed — run:

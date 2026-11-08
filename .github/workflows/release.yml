@@ -60,8 +60,16 @@ jobs:
 
       # The pin (tag, asset, SHA256) lives in .github/ffmpeg-pin.yml, bumped monthly by
       # ffmpeg-bump.yml; the script verifies the download against it.
+      # --license-dest keeps the zip's LICENSE.txt OUTSIDE dist/ so only collect_licenses ships it.
       - name: Download and verify FFmpeg
-        run: uv run --no-sync python scripts/ffmpeg_pin.py fetch --dest dist/MeadowLark
+        run: uv run --no-sync python scripts/ffmpeg_pin.py fetch --dest dist/MeadowLark --license-dest ffmpeg_licenses
+
+      # Builds dist/MeadowLark/licenses (texts + INVENTORY.txt); setup.iss packs dist\MeadowLark\* as-is.
+      - name: Collect third-party licenses
+        shell: pwsh
+        run: |
+          $asset = (Select-String -Path .github/ffmpeg-pin.yml -Pattern '^FFMPEG_ASSET:\s*(\S+)').Matches[0].Groups[1].Value
+          uv run --no-sync python scripts/collect_licenses.py --out dist/MeadowLark/licenses --ffmpeg-root ffmpeg_licenses --ffmpeg-asset $asset
 
       - name: Build installer
         shell: pwsh
