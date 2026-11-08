@@ -1,6 +1,6 @@
-# Dependabot covers GitHub Actions only. The pinned FFmpeg build in .github/ffmpeg-pin.yml is bumped by
-# ffmpeg-bump.yml, not Dependabot, because BtbN's builds are release assets rather than a
-# package ecosystem Dependabot can read.
+# Dependabot covers GitHub Actions and the Python lockfile. The pinned FFmpeg build in
+# .github/ffmpeg-pin.yml is bumped by ffmpeg-bump.yml, not Dependabot, because BtbN's builds are
+# release assets rather than a package ecosystem Dependabot can read.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -13,4 +13,15 @@ updates:
     # One PR for all action bumps, so ci.yml and release.yml move together.
     groups:
       actions:
+        patterns: ["*"]
+  # Python dependencies (pyproject.toml + uv.lock). Grouped so one PR moves the lockfile at a time.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps"
+    groups:
+      python:
         patterns: ["*"]

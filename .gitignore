@@ -11,7 +11,10 @@ __pycache__
 *.lock
 .coverage
 .env
-plans/*
+# Planning notes from /plan-feature and /implement-plan stay local (scripts/release.ps1 runs `git add .`).
+plans/
+# Personal editor settings (and AI-agent auto-approve rules) must not be inherited by cloners.
+.vscode/settings.json
 resources/failed_downloads.json
 # Per-user deferred-download state (live/premiere URLs awaiting airtime).
 # load_pending_queue() returns [] when the file is absent, so a clean checkout is fine.
@@ -46,6 +49,7 @@ scripts/*
 # a negation can't rescue a file whose parent dir is excluded outright.
 docs/*
 # Re-include the README's screenshot -- the rest of docs/ (planning notes) stays local-only.
+# docs/plans/ was tracked once and untracked later -- never re-add it (test_repo_hygiene.py guards this).
 !docs/screenshot.png
 # Re-include the generated GitHub social preview card.
 !docs/social-preview.png
