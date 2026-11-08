@@ -3,8 +3,10 @@ Tests for scripts/collect_licenses.py and the third-party notices it feeds.
 
 Coverage map
 ============
-python_closure / python_component
-    - real env closure            -> transitive runtime deps in, root and dev tools out
+project_requirements / python_closure / python_component
+    - real env closure            -> seeded from pyproject.toml (virtual root, no dist
+                                     metadata); transitive runtime deps in, root/dev tools out
+    - pyproject parsing           -> name + dependencies read; no [project] table -> exit 1
     - inapplicable markers        -> extras-only / wrong-platform requirements never resolved
     - PEP 639 license dir         -> license files found and existing
     - bgutil override             -> GPL-3.0 + the vendored LICENSE file
@@ -83,7 +85,10 @@ def _write_npm_package(
 
 
 def test_python_closure_includes_transitive_runtime_deps(collector: types.ModuleType) -> None:
-    names = {collector._normalize(d.name) for d in collector.python_closure("meadowlark")}
+    # Seeded from pyproject.toml: the project itself is a uv *virtual* root with no installed
+    # dist metadata, so this must pass on a clean checkout (no stray meadowlark.egg-info).
+    root = collector.project_requirements(_REPO_ROOT / "pyproject.toml")
+    names = {collector._normalize(d.name) for d in collector.python_closure(*root)}
     assert {"requests", "urllib3", "certifi", "pyqt6-qt6"} <= names
     assert names.isdisjoint({"meadowlark", "pytest", "ruff"})
 
@@ -91,21 +96,97 @@ def test_python_closure_includes_transitive_runtime_deps(collector: types.Module
 def test_python_closure_skips_inapplicable_markers(
     collector: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    class _FakeDist:
-        name = "fakeroot"
-        requires = ["x ; extra == 'cli'", "y ; sys_platform == 'nonexistent'"]
+    looked_up: list[str] = []
 
+    def _fake_distribution(name: str) -> object:
+        looked_up.append(name)
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(collector.importlib.metadata, "distribution", _fake_distribution)
+    root_requires = ["x ; extra == 'cli'", "y ; sys_platform == 'nonexistent'"]
+    assert collector.python_closure("fakeroot", root_requires) == []
+    assert looked_up == []
+
+
+def test_project_requirements_reads_name_and_dependencies(
+    tmp_path: Path, collector: types.ModuleType
+) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "demo"\ndependencies = ["requests>=2", "x ; extra == \'cli\'"]\n',
+        encoding="utf-8",
+    )
+    assert collector.project_requirements(pyproject) == (
+        "demo",
+        ["requests>=2", "x ; extra == 'cli'"],
+    )
+
+
+def test_project_requirements_without_dependencies_key_yields_empty_list(
+    tmp_path: Path, collector: types.ModuleType
+) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    assert collector.project_requirements(pyproject) == ("demo", [])
+
+
+def test_python_closure_cycle_back_to_root_is_not_collected_or_looked_up(
+    collector: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _FakeDist:
+        def __init__(self, name: str, requires: list[str] | None) -> None:
+            self.name = name
+            self.requires = requires
+
+    dists = {
+        "dep-a": _FakeDist("dep-a", ["Demo_Root>=1", "dep-b"]),
+        "dep-b": _FakeDist("dep-b", None),
+    }
     looked_up: list[str] = []
 
     def _fake_distribution(name: str) -> _FakeDist:
         looked_up.append(name)
-        if name != "fakeroot":
-            raise importlib.metadata.PackageNotFoundError(name)
-        return _FakeDist()
+        return dists[name]
 
     monkeypatch.setattr(collector.importlib.metadata, "distribution", _fake_distribution)
-    assert collector.python_closure("fakeroot") == []
-    assert looked_up == ["fakeroot"]
+    closure = collector.python_closure("demo-root", ["demo.root", "dep-a"])
+    assert [d.name for d in closure] == ["dep-a", "dep-b"]
+    assert looked_up == ["dep-a", "dep-b"]
+
+
+@pytest.mark.parametrize("content", [None, "[project\nname = "])
+def test_main_exits_1_when_pyproject_is_missing_or_malformed(
+    tmp_path: Path,
+    collector: types.ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    content: str | None,
+) -> None:
+    npm_root = tmp_path / "node_modules"
+    _write_left_pad(npm_root)
+    pyproject = tmp_path / "pyproject.toml"
+    if content is not None:
+        pyproject.write_text(content, encoding="utf-8")
+    code = collector.main(
+        ["--out", str(tmp_path / "out"), "--npm-root", str(npm_root), "--pyproject", str(pyproject)]
+    )
+    assert code == 1
+    assert capsys.readouterr().err.startswith("error:")
+    assert not (tmp_path / "out").exists()
+
+
+def test_main_exits_1_when_pyproject_has_no_project_table(
+    tmp_path: Path, collector: types.ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    npm_root = tmp_path / "node_modules"
+    _write_left_pad(npm_root)
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("[tool.x]\n", encoding="utf-8")
+    code = collector.main(
+        ["--out", str(tmp_path / "out"), "--npm-root", str(npm_root), "--pyproject", str(pyproject)]
+    )
+    assert code == 1
+    assert "[project] name" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
 
 
 def test_python_component_reads_pep639_license_dir(collector: types.ModuleType) -> None:
@@ -419,7 +500,7 @@ def test_main_exits_1_when_a_required_distribution_is_not_installed(
     npm_root = tmp_path / "node_modules"
     _write_left_pad(npm_root)
 
-    def _missing(_root: str) -> list[object]:
+    def _missing(*_args: object) -> list[object]:
         raise importlib.metadata.PackageNotFoundError("ghost-dep")
 
     monkeypatch.setattr(collector, "python_closure", _missing)

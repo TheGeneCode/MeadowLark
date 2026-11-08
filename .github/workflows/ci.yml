@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         # Must cover the full `requires-python` range in pyproject.toml. Lowering that
-        # floor means adding a leg here (see docs/plans/roadmap-python-floor-311.md).
+        # floor means adding a leg here; tests/test_ci_workflow.py enforces it.
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     env:
       # Selects the interpreter for every uv command in this job. Takes precedence over
