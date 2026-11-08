@@ -1,0 +1,12 @@
+# The FFmpeg build bundled into the installer. Read and rewritten by scripts/ffmpeg_pin.py;
+# release.yml and ffmpeg-bump.yml only ever call that script.
+#
+# Month-end BtbN autobuilds are retained long-term (dailies are pruned after ~2 weeks).
+# This file is bumped by .github/workflows/ffmpeg-bump.yml (monthly PR). Manual bump:
+#   uv run python scripts/ffmpeg_pin.py check [--branch X.Y]  -> set FFMPEG_* env -> apply
+#
+# It is deliberately NOT under .github/workflows/: the bump workflow pushes it with
+# GITHUB_TOKEN, and GitHub refuses token pushes that modify workflow files.
+FFMPEG_TAG: autobuild-2026-10-31-12-59
+FFMPEG_ASSET: ffmpeg-n9.0.2-39-g7adfbe40dc-win64-gpl-9.0.zip
+FFMPEG_SHA256: 693f3e224bc184b40524a62ca47526cfebaf2504414021b92fe75f677ad868b9

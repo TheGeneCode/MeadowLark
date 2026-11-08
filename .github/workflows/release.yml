@@ -23,12 +23,6 @@ jobs:
     env:
       # Expressions are expanded here, never inside run: scripts (script-injection hygiene).
       RELEASE_TAG: ${{ github.ref_name }}
-      # Month-end BtbN autobuilds are retained long-term (dailies are pruned after ~2 weeks).
-      # To bump: pick a newer month-end autobuild-YYYY-MM-DD-* tag, take the win64-gpl-<branch>.zip
-      # name and its hash from that release's checksums.sha256.
-      FFMPEG_TAG: autobuild-2026-10-31-12-59
-      FFMPEG_ASSET: ffmpeg-n9.0.2-39-g7adfbe40dc-win64-gpl-9.0.zip
-      FFMPEG_SHA256: 693f3e224bc184b40524a62ca47526cfebaf2504414021b92fe75f677ad868b9
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,19 +58,10 @@ jobs:
       - name: Build executable
         run: uv run --no-sync pyinstaller meadowlark.spec
 
+      # The pin (tag, asset, SHA256) lives in .github/ffmpeg-pin.yml, bumped monthly by
+      # ffmpeg-bump.yml; the script verifies the download against it.
       - name: Download and verify FFmpeg
-        shell: pwsh
-        run: |
-          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/$env:FFMPEG_TAG/$env:FFMPEG_ASSET"
-          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
-          $actual = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash
-          if ($actual -ne $env:FFMPEG_SHA256) {
-            throw "FFmpeg SHA256 mismatch: expected $env:FFMPEG_SHA256, got $actual"
-          }
-          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
-          $bin = Get-ChildItem ffmpeg_tmp -Recurse -Filter "bin" -Directory | Select-Object -First 1
-          Copy-Item "$($bin.FullName)\ffmpeg.exe"  dist\MeadowLark\
-          Copy-Item "$($bin.FullName)\ffprobe.exe" dist\MeadowLark\
+        run: uv run --no-sync python scripts/ffmpeg_pin.py fetch --dest dist/MeadowLark
 
       - name: Build installer
         shell: pwsh

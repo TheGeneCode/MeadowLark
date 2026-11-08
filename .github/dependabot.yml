@@ -1,3 +1,6 @@
+# Dependabot covers GitHub Actions only. The pinned FFmpeg build in .github/ffmpeg-pin.yml is bumped by
+# ffmpeg-bump.yml, not Dependabot, because BtbN's builds are release assets rather than a
+# package ecosystem Dependabot can read.
 version: 2
 updates:
   - package-ecosystem: "github-actions"

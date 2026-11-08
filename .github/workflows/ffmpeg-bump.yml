@@ -1,0 +1,121 @@
+name: FFmpeg bump
+on:
+  schedule:
+    # 06:00 UTC on the 2nd: the previous month's month-end autobuild exists by then.
+    - cron: "0 6 2 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffmpeg-bump
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      status: ${{ steps.decide.outputs.status }}
+      tag: ${{ steps.decide.outputs.tag }}
+      asset: ${{ steps.decide.outputs.asset }}
+      sha256: ${{ steps.decide.outputs.sha256 }}
+      version: ${{ steps.decide.outputs.version }}
+      current_version: ${{ steps.decide.outputs.current_version }}
+      notices: ${{ steps.decide.outputs.notices }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: false
+      - id: decide
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # Stdlib-only script: no project environment needed.
+        run: uv run --no-project --python 3.14 scripts/ffmpeg_pin.py check
+
+  notices:
+    needs: check
+    if: needs.check.outputs.notices != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NOTICES: ${{ needs.check.outputs.notices }}
+    steps:
+      - name: File each notice once (exact-title dedupe against open issues)
+        run: |
+          open_titles=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json title --jq '.[].title')
+          echo "$NOTICES" | jq -c '.[]' | while read -r n; do
+            title=$(jq -r .title <<<"$n")
+            if ! grep -Fxq -- "$title" <<<"$open_titles"; then
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$(jq -r .body <<<"$n")"
+            fi
+          done
+
+  smoke:
+    needs: check
+    if: needs.check.outputs.status == 'patch'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      FFMPEG_TAG: ${{ needs.check.outputs.tag }}
+      FFMPEG_ASSET: ${{ needs.check.outputs.asset }}
+      FFMPEG_SHA256: ${{ needs.check.outputs.sha256 }}
+      MEADOWLARK_FFMPEG_DIR: ${{ github.workspace }}/ffmpeg_candidate
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-suffix: ffmpeg-bump
+      - run: uv sync --locked --group dev
+      - name: Apply the candidate pin
+        run: uv run --no-sync python scripts/ffmpeg_pin.py apply
+      # Reads the pin back from the edited .github/ffmpeg-pin.yml, so apply -> fetch round-trips.
+      - name: Download and verify the candidate
+        run: uv run --no-sync python scripts/ffmpeg_pin.py fetch --dest ffmpeg_candidate
+      - name: Smoke-test the candidate through yt-dlp's postprocessors
+        run: uv run --no-sync pytest -q -m ffmpeg_smoke
+      - name: Full suite on the bumped tree (ci.yml will not run on a bot PR)
+        run: uv run --no-sync pytest -q -m "not ffmpeg_smoke"
+
+  pr:
+    needs: [check, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: bot/ffmpeg-bump
+      FFMPEG_TAG: ${{ needs.check.outputs.tag }}
+      FFMPEG_ASSET: ${{ needs.check.outputs.asset }}
+      FFMPEG_SHA256: ${{ needs.check.outputs.sha256 }}
+      FFMPEG_VERSION: ${{ needs.check.outputs.version }}
+      FFMPEG_CURRENT_VERSION: ${{ needs.check.outputs.current_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: false
+      - run: uv run --no-project --python 3.14 scripts/ffmpeg_pin.py apply
+      - name: Push the rolling branch and open or refresh its PR
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git commit -am "ci: Bump FFmpeg to $FFMPEG_VERSION ($FFMPEG_TAG)"
+          git push --force origin "$BRANCH"
+          title="ci: Bump FFmpeg to $FFMPEG_VERSION"
+          body=$(uv run --no-project --python 3.14 scripts/ffmpeg_pin.py pr-body)
+          if [ "$(gh pr view "$BRANCH" --json state --jq .state 2>/dev/null)" = "OPEN" ]; then
+            gh pr edit "$BRANCH" --title "$title" --body "$body"
+          else
+            gh pr create --head "$BRANCH" --base main --title "$title" --body "$body"
+          fi

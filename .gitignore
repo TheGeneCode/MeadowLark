@@ -38,6 +38,8 @@ scripts/*
 !scripts/yt_dlp_channel.py
 # Track the social preview generator -- test_make_social_preview.py loads it from disk.
 !scripts/make_social_preview.py
+# Track the FFmpeg pin tool -- release.yml, ffmpeg-bump.yml and test_ffmpeg_pin.py all run it.
+!scripts/ffmpeg_pin.py
 # Ignore docs/ contents (not the dir itself) so the screenshot below can be re-included --
 # a negation can't rescue a file whose parent dir is excluded outright.
 docs/*

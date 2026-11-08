@@ -21,6 +21,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 _RELEASE = _WORKFLOWS / "release.yml"
 _CI = _WORKFLOWS / "ci.yml"
+_BUMP = _WORKFLOWS / "ffmpeg-bump.yml"
+_PIN_FILE = _REPO_ROOT / ".github" / "ffmpeg-pin.yml"
 _SPEC = _REPO_ROOT / "meadowlark.spec"
 
 _USES = re.compile(r"^\s*(?:-\s+)?uses:\s*([^\s#]+)", re.MULTILINE)
@@ -87,10 +89,15 @@ def test_every_workflow_action_is_sha_pinned() -> None:
     assert not offenders, f"actions not pinned to a 40-hex commit SHA: {offenders}"
 
 
-def test_release_run_scripts_never_interpolate_expressions() -> None:
-    """`${{ }}` inside `run:` is textual substitution into a shell script (injection)."""
-    lines = _run_script_lines(_RELEASE.read_text(encoding="utf-8"))
-    assert lines, "no run: scripts extracted from release.yml; the parser went stale"
+@pytest.mark.parametrize("workflow", [_RELEASE, _BUMP], ids=lambda path: path.name)
+def test_run_scripts_never_interpolate_expressions(workflow: Path) -> None:
+    """
+    `${{ }}` inside `run:` is textual substitution into a shell script (injection).
+
+    ci.yml is excluded on purpose: it interpolates matrix values into `run:` lines.
+    """
+    lines = _run_script_lines(workflow.read_text(encoding="utf-8"))
+    assert lines, f"no run: scripts extracted from {workflow.name}; the parser went stale"
     offenders = [line for line in lines if "${{" in line]
     assert not offenders, f"workflow expression inside a run: script: {offenders}"
 
@@ -140,8 +147,23 @@ def test_release_uv_sync_is_locked() -> None:
 def test_release_ffmpeg_is_pinned_and_hash_checked() -> None:
     text = _RELEASE.read_text(encoding="utf-8")
     assert "/releases/download/latest/" not in text, "FFmpeg is fetched from the moving `latest`"
-    assert _FFMPEG_SHA256.search(text), "FFMPEG_SHA256 is missing or not 64 lowercase hex"
-    assert "Get-FileHash ffmpeg.zip" in text, "the FFmpeg download is never hash-checked"
+    assert _FFMPEG_SHA256.search(_PIN_FILE.read_text(encoding="utf-8")), (
+        "FFMPEG_SHA256 is missing or not 64 lowercase hex in .github/ffmpeg-pin.yml"
+    )
+    assert "scripts/ffmpeg_pin.py fetch" in text, "FFmpeg download bypasses the verifying script"
+
+
+def test_ffmpeg_pin_lives_outside_the_workflows_directory() -> None:
+    """
+    The bump bot pushes the pin with GITHUB_TOKEN, which may not modify workflow files.
+
+    So the pin must sit in a file outside .github/workflows/, and release.yml must not
+    carry its own copy (two copies would drift).
+    """
+    assert _PIN_FILE.is_file()
+    assert _WORKFLOWS not in _PIN_FILE.parents
+    release_text = _RELEASE.read_text(encoding="utf-8")
+    assert not re.search(r"^\s*FFMPEG_(TAG|ASSET|SHA256):", release_text, re.MULTILINE)
 
 
 def test_release_build_is_gated_on_ci() -> None:
@@ -193,6 +215,22 @@ def test_release_publishes_checksum_and_attestation() -> None:
     assert "actions/attest-build-provenance@" in text
     assert ".exe.sha256" in text
     assert "body_path: release_notes.md" in text
+
+
+def test_ffmpeg_bump_pr_is_gated_on_smoke() -> None:
+    """A bot PR may only open after the real-FFmpeg smoke tests and the full suite passed."""
+    text = _BUMP.read_text(encoding="utf-8")
+    assert "needs: [check, smoke]" in text
+    assert "-m ffmpeg_smoke" in text
+    assert '-m "not ffmpeg_smoke"' in text
+
+
+def test_ffmpeg_bump_write_scopes_are_job_local() -> None:
+    """Write tokens belong to the one job that needs them, never to the whole workflow."""
+    text = _BUMP.read_text(encoding="utf-8")
+    assert re.search(r"^permissions:\n  contents: read$", text, re.MULTILINE)
+    assert text.count("contents: write") == 1
+    assert text.count("issues: write") == 1
 
 
 def test_spec_bundles_only_icons_from_resources() -> None:

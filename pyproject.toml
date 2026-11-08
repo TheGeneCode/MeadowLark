@@ -30,6 +30,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config"]
+markers = ["ffmpeg_smoke: runs a real FFmpeg build (set MEADOWLARK_FFMPEG_DIR)"]
 filterwarnings = ["error"]
 
 # Type checker (backlog #24). `basic`, not basedpyright's default `recommended`: the floor is
