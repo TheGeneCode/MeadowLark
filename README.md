@@ -80,6 +80,11 @@ It also handles:
 
 > **Seeing a blue "Windows protected your PC" screen?** That's Microsoft SmartScreen — it flags any new installer without an expensive code-signing certificate, not a sign of a problem. Click **More info**, then **Run anyway** to continue.
 
+> **Want to check the installer is genuine?** Each release lists the installer's SHA256. In PowerShell,
+> run `Get-FileHash .\MeadowLark-Setup-{version}.exe` and compare the **Hash** with the release page.
+> With the [GitHub CLI](https://cli.github.com/) you can also confirm it was built by this repo's
+> release workflow: `gh attestation verify MeadowLark-Setup-{version}.exe --repo TheGeneCode/MeadowLark`.
+
 ---
 
 ## First Launch

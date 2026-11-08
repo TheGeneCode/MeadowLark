@@ -10,7 +10,10 @@ a = Analysis(
     datas=copy_metadata("meadowlark")
     + copy_metadata("bgutil-ytdlp-pot-provider")
     + [
-        ("resources", "resources"),
+        # Only the icons ship. Everything else under resources/ is per-user runtime state
+        # (cookies.txt, archive.txt, playlists/, *_queue.json, failed_downloads.json) that a
+        # local build would otherwise bundle into the installer.
+        ("resources/icons", "resources/icons"),
         (
             ".venv/Lib/site-packages/yt_dlp_plugins/extractor",
             "yt-dlp-plugins/extractor",

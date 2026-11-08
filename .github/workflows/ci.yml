@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml calls this workflow as its `ci` job and only builds when every job here passes.
+  workflow_call:
 
 permissions:
   contents: read

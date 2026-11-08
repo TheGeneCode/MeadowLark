@@ -11,6 +11,7 @@ __pycache__
 *.lock
 .coverage
 .env
+plans/*
 resources/failed_downloads.json
 # Per-user deferred-download state (live/premiere URLs awaiting airtime).
 # load_pending_queue() returns [] when the file is absent, so a clean checkout is fine.

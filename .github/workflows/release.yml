@@ -3,39 +3,76 @@ on:
   push:
     tags: ["v*.*.*"]
 
+# Least privilege by default; only the build job widens it.
+permissions:
+  contents: read
+
 jobs:
+  # Same test/lint/typecheck jobs as every push. A red suite never reaches the build.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     runs-on: windows-latest
+    timeout-minutes: 45
     permissions:
-      contents: write
+      contents: write      # create the GitHub Release and upload assets
+      id-token: write      # OIDC token for attest-build-provenance
+      attestations: write  # store the provenance attestation
+    env:
+      # Expressions are expanded here, never inside run: scripts (script-injection hygiene).
+      RELEASE_TAG: ${{ github.ref_name }}
+      # Month-end BtbN autobuilds are retained long-term (dailies are pruned after ~2 weeks).
+      # To bump: pick a newer month-end autobuild-YYYY-MM-DD-* tag, take the win64-gpl-<branch>.zip
+      # name and its hash from that release's checksums.sha256.
+      FFMPEG_TAG: autobuild-2026-10-31-12-59
+      FFMPEG_ASSET: ffmpeg-n9.0.2-39-g7adfbe40dc-win64-gpl-9.0.zip
+      FFMPEG_SHA256: 693f3e224bc184b40524a62ca47526cfebaf2504414021b92fe75f677ad868b9
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # release notes need the previous tag
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          # No cache in the job that publishes artifacts: a restored cache is input we did not build.
+          enable-cache: false
 
-      - name: Stamp version from tag
+      - name: Check the tag matches pyproject.toml
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
-          uv version $version
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Tag '$env:RELEASE_TAG' is not vX.Y.Z"
+          }
+          $version = $env:RELEASE_TAG.Substring(1)
+          $declared = (uv version --short).Trim()
+          if ($declared -ne $version) {
+            throw "Tag $env:RELEASE_TAG but pyproject.toml declares $declared -- run scripts/release.ps1, which commits the bump before tagging"
+          }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Install dependencies (incl. dev group for PyInstaller)
-        run: uv sync --group dev
+      - name: Install the locked dependency set (incl. dev group for PyInstaller)
+        run: uv sync --locked --group dev
 
       - name: Install package in editable mode (required for copy_metadata in spec)
         run: uv pip install -e .
 
       - name: Set up PO-token provider (deno install)
-        run: uv run python scripts/setup_pot_provider.py --skip-warm
+        run: uv run --no-sync python scripts/setup_pot_provider.py --skip-warm
 
       - name: Build executable
-        run: uv run pyinstaller meadowlark.spec
+        run: uv run --no-sync pyinstaller meadowlark.spec
 
-      - name: Download FFmpeg
+      - name: Download and verify FFmpeg
         shell: pwsh
         run: |
-          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/$env:FFMPEG_TAG/$env:FFMPEG_ASSET"
           Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          $actual = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash
+          if ($actual -ne $env:FFMPEG_SHA256) {
+            throw "FFmpeg SHA256 mismatch: expected $env:FFMPEG_SHA256, got $actual"
+          }
           Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
           $bin = Get-ChildItem ffmpeg_tmp -Recurse -Filter "bin" -Directory | Select-Object -First 1
           Copy-Item "$($bin.FullName)\ffmpeg.exe"  dist\MeadowLark\
@@ -44,12 +81,47 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            /DAppVersion=$version `
+            /DAppVersion=$env:VERSION `
             installer\setup.iss
+
+      - name: Write checksum and release notes
+        shell: pwsh
+        run: |
+          $exe = "MeadowLark-Setup-$env:VERSION.exe"
+          $hash = (Get-FileHash "installer_output\$exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          # sha256sum-compatible line: "<hash>  <filename>"
+          "$hash  $exe" | Out-File -FilePath "installer_output\$exe.sha256" -Encoding ascii -NoNewline
+
+          $prev = git describe --tags --abbrev=0 "$env:RELEASE_TAG^" 2>$null
+          if ($LASTEXITCODE -ne 0) { $prev = $null; $global:LASTEXITCODE = 0 }
+          $range = if ($prev) { "$prev..$env:RELEASE_TAG" } else { $env:RELEASE_TAG }
+          $changes = git log --no-merges --pretty=format:'- %s (%h)' $range
+
+          $repo = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY"
+          $lines = @("## Changes", "") + $changes + @(
+            "",
+            "## Verify your download",
+            "",
+            "SHA256 of ``$exe``:",
+            "",
+            "``$hash``",
+            "",
+            "- PowerShell: ``Get-FileHash .\$exe`` and compare **Hash** with the value above.",
+            "- Build provenance (GitHub CLI): ``gh attestation verify $exe --repo $env:GITHUB_REPOSITORY``"
+          )
+          if ($prev) { $lines += @("", "**Full Changelog**: $repo/compare/$prev...$env:RELEASE_TAG") }
+          $lines -join "`n" | Out-File -FilePath release_notes.md -Encoding utf8
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: installer_output/MeadowLark-Setup-*.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
-          files: installer_output/MeadowLark-Setup-*.exe
+          body_path: release_notes.md
+          files: |
+            installer_output/MeadowLark-Setup-*.exe
+            installer_output/MeadowLark-Setup-*.exe.sha256
