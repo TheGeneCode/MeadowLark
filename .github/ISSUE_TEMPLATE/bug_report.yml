@@ -1,0 +1,63 @@
+name: Bug report
+description: Something isn't working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please search existing issues first.
+
+        Downloads failing with HTTP 403? Read [the PO-token section](https://github.com/TheGeneCode/MeadowLark#youtube-1080p-downloads--the-po-token-provider) first.
+  - type: input
+    id: version
+    attributes:
+      label: MeadowLark version
+      description: Settings → About
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How are you running it?
+      options:
+        - Installer (Releases page)
+        - From source (uv run)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Drop … on the 1080 tile
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant lines from error_log.txt
+      description: Found in %APPDATA%\MeadowLark. Paste only the lines around the failure.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed my username from file paths and did NOT paste ytdlp_debug.log or cookies.txt (they contain tokens and login sessions)
+          required: true

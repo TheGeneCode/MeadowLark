@@ -349,7 +349,7 @@ cd MeadowLark
 uv sync
 uv run python scripts/setup_pot_provider.py   # installs the vendored PO-token provider deps (needed for 1080p)
 cp .env.example .env
-git config core.hooksPath .githooks
+git config core.hooksPath .githooks           # optional — see CONTRIBUTING.md "Git Hooks"
 uv run python meadowlark.pyw
 ```
 
@@ -357,7 +357,7 @@ uv run python meadowlark.pyw
 
 ### Prerequisites
 
-- **Python ≥ 3.10** and **[uv](https://docs.astral.sh/uv/getting-started/installation/)**
+- **Python ≥ 3.11** and **[uv](https://docs.astral.sh/uv/getting-started/installation/)**
 - **FFmpeg** — required for audio/podcast downloads. Install via [ffmpeg.org](https://ffmpeg.org/download.html) or a package manager, and make sure it's on `PATH`.
 - **Deno** — auto-installed into `.venv/Scripts` when you run `uv sync`.
 

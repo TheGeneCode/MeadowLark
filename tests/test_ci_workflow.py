@@ -323,6 +323,14 @@ def test_meadowlark_pyw_docstring_floor_matches_pyproject() -> None:
     assert match.group(1) == _requires_python_floor()
 
 
+def test_readme_prerequisite_floor_matches_pyproject() -> None:
+    """README's Developer Setup said 'Python ≥ 3.10' long after the floor moved to 3.11."""
+    readme = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(r"\*\*Python ≥ (\d+\.\d+)\*\*", readme)
+    assert match is not None, "README Prerequisites no longer has a '**Python ≥ X.Y**' line"
+    assert match.group(1) == _requires_python_floor()
+
+
 def test_basedpyright_python_version_matches_pyproject_floor() -> None:
     """
     The type checker must judge code against the oldest supported interpreter.
