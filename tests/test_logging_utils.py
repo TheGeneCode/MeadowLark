@@ -64,3 +64,22 @@ class TestLogException:
                 handler.close()
             logging.root.handlers = original_handlers
         assert "test context: test error" in log_path.read_text(encoding="utf-8")
+
+    def test_log_exception_outside_except_block_records_passed_traceback(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A previously caught exception keeps its traceback after the handler exits."""
+        try:
+            int("not a number")
+        except ValueError as exc:
+            caught = exc
+        assert logging.getLogger().hasHandlers()  # caplog handler: skip basicConfig path
+
+        with caplog.at_level(logging.ERROR):
+            log_exception(caught, "late")
+
+        record = next(r for r in caplog.records if "late: invalid literal" in r.getMessage())
+        assert record.exc_info is not None
+        assert record.exc_info[1] is caught
+        assert "ValueError: invalid literal" in caplog.text
+        assert "NoneType: None" not in caplog.text

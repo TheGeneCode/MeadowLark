@@ -24,6 +24,21 @@ _YTDLP_DEBUG_BACKUPS = 2
 _debug_logger_lock = threading.Lock()
 
 
+def _capture_handler(debug_logger: logging.Logger) -> logging.Handler | None:
+    """
+    Return the capture file handler this module attached, if any.
+
+    Matched by name, not by ``bool(debug_logger.handlers)``: foreign handlers
+    can sit on this logger too (pytest >= 9.2 attaches ``LogCaptureHandler`` to
+    non-propagating loggers), and treating one as ours would skip opening the
+    debug log entirely.
+    """
+    for handler in debug_logger.handlers:
+        if handler.get_name() == _YTDLP_DEBUG_LOGGER_NAME:
+            return handler
+    return None
+
+
 def get_local_timestamp() -> str:
     """Return current local timestamp as formatted string 'YYYY-MM-DD HH:MM:SS'."""
     return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
@@ -46,7 +61,9 @@ def log_exception(exc: Exception, context: str | None = None) -> None:
     if not logging.getLogger().hasHandlers():
         configure_logging("ERROR", log_file=ERROR_LOG_PATH, console="none")
     msg = f"{context}: {exc}" if context else str(exc)
-    logger.exception(msg)
+    # Explicit exc_info: exception() reads sys.exc_info(), which is empty when a
+    # caller passes an exception it caught earlier and is no longer handling.
+    logger.error(msg, exc_info=exc)
 
 
 def get_ytdlp_debug_logger() -> logging.Logger | None:
@@ -72,13 +89,13 @@ def get_ytdlp_debug_logger() -> logging.Logger | None:
         return None
 
     debug_logger = logging.getLogger(_YTDLP_DEBUG_LOGGER_NAME)
-    if debug_logger.handlers:
+    if _capture_handler(debug_logger) is not None:
         return debug_logger
 
     with _debug_logger_lock:
         # Re-check inside the lock: another thread may have attached the
         # handler while this one was waiting.
-        if debug_logger.handlers:
+        if _capture_handler(debug_logger) is not None:
             return debug_logger
 
         try:
@@ -94,6 +111,7 @@ def get_ytdlp_debug_logger() -> logging.Logger | None:
             log_exception(exc, "Could not open the yt-dlp debug log")
             return None
 
+        handler.set_name(_YTDLP_DEBUG_LOGGER_NAME)
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(message)s"))
         debug_logger.addHandler(handler)
         debug_logger.setLevel(logging.DEBUG)

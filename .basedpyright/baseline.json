@@ -492,24 +492,6 @@
                 }
             }
         ],
-        "./src/window_geometry.py": [
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 34,
-                    "endColumn": 55,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 34,
-                    "endColumn": 55,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./tests/_vd_loader.py": [
             {
                 "code": "reportAttributeAccessIssue",

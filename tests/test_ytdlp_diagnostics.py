@@ -57,13 +57,23 @@ from src.ydl_options import JS_RUNTIMES_CONFIG, resolve_cookiefile
 _JOIN_TIMEOUT_S = 5.0
 
 
+def _own_handlers(lg: logging.Logger) -> list[logging.Handler]:
+    """
+    Handlers this module attached, ignoring foreign ones.
+
+    pytest >= 9.2 adds its own ``LogCaptureHandler`` to non-propagating loggers,
+    so a raw ``len(lg.handlers)`` no longer counts only ours.
+    """
+    return [h for h in lg.handlers if h.get_name() == logging_utils._YTDLP_DEBUG_LOGGER_NAME]
+
+
 @pytest.fixture(autouse=True)
 def _clean_debug_logger():
-    """Detach handlers from the capture logger around every test."""
+    """Detach the capture handler from the capture logger around every test."""
 
     def _reset() -> None:
         lg = logging.getLogger(logging_utils._YTDLP_DEBUG_LOGGER_NAME)
-        for handler in list(lg.handlers):
+        for handler in _own_handlers(lg):
             handler.close()
             lg.removeHandler(handler)
 
@@ -120,7 +130,28 @@ class TestGetYtdlpDebugLogger:
             second = logging_utils.get_ytdlp_debug_logger()
         assert first is second
         assert first is not None
-        assert len(first.handlers) == 1
+        assert len(_own_handlers(first)) == 1
+
+    def test_foreign_handler_does_not_block_file_handler(self, tmp_path: Path) -> None:
+        """An unnamed handler already on the logger must not read as 'configured'."""
+        target = tmp_path / "ytdlp_debug.log"
+        foreign = logging.NullHandler()
+        lg = logging.getLogger(logging_utils._YTDLP_DEBUG_LOGGER_NAME)
+        lg.addHandler(foreign)
+        try:
+            with (
+                patch.object(logging_utils, "YTDLP_VERBOSE", True),
+                patch.object(logging_utils, "YTDLP_DEBUG_LOG_PATH", target),
+            ):
+                debug_logger = logging_utils.get_ytdlp_debug_logger()
+                assert debug_logger is not None
+                debug_logger.debug("pot=foreign-ok")
+                for handler in _own_handlers(debug_logger):
+                    handler.flush()
+            assert len(_own_handlers(lg)) == 1
+            assert "pot=foreign-ok" in target.read_text(encoding="utf-8")
+        finally:
+            lg.removeHandler(foreign)
 
     def test_does_not_propagate_to_root(self, tmp_path: Path) -> None:
         """The capture must never leak into error_log.txt."""
@@ -153,7 +184,7 @@ class TestGetYtdlpDebugLogger:
         """
         Two QLogger constructions racing the cold path must not double-attach.
 
-        Both threads pass the unlocked ``if debug_logger.handlers:`` fast-path
+        Both threads pass the unlocked ``_capture_handler(...)`` fast-path
         check as empty (neither has added one yet) before either reaches the
         lock -- widened here by making lock acquisition itself wait on a
         barrier, so both threads are guaranteed to arrive at
@@ -201,7 +232,7 @@ class TestGetYtdlpDebugLogger:
 
         assert results[0] is not None
         assert results[0] is results[1]
-        assert len(results[0].handlers) == 1
+        assert len(_own_handlers(results[0])) == 1
 
 
 class TestVerboseOption:
