@@ -76,3 +76,13 @@ def test_cookies_and_user_state_ignored(path: str) -> None:
 def test_dependabot_watches_uv_lockfile() -> None:
     config = (_REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     assert 'package-ecosystem: "uv"' in config
+
+
+def test_dependabot_excludes_bgutil_from_python_group() -> None:
+    # Without the exclusion, bgutil's bump rides in the grouped PR and turns the whole
+    # group red (tests/test_pot_provider_pin.py), blocking unrelated dependency updates.
+    config = (_REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    uncommented = "\n".join(
+        line for line in config.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert 'exclude-patterns: ["bgutil-ytdlp-pot-provider"]' in uncommented

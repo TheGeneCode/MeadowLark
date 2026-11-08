@@ -28,13 +28,15 @@ src.pot_provider._plugin_importable (exercised directly, not mocked away)
     - find_spec raises ImportError/ValueError -> False
 
 src.pot_provider._deno_ok (additional boundaries)
-    - exact min version (2.0.0)            -> True
+    - exact min version (2.4.3)            -> True
+    - just below min patch (2.4.2)         -> False
+    - just below min minor (2.3.9)         -> False
     - just below min major (1.99.99)       -> False
     - multiline stdout, version on line 1  -> True
     - extra internal whitespace            -> True
     - empty / None stdout                  -> False
     - unparseable / incomplete version     -> False
-    - prerelease suffix (2.0.0-rc.1)       -> True (documents permissive parsing)
+    - prerelease suffix (2.4.3-rc.1)       -> True (documents permissive parsing)
     - non-zero returncode                  -> False, even with valid-looking stdout
     - subprocess timeout / OSError         -> False (swallowed)
     - deno.exe path is a directory         -> False, subprocess never invoked
@@ -245,7 +247,7 @@ def test_status_frozen_dataclass_blocks_attribute_delete() -> None:
 
 _ALL_MISSING_LABELS = {
     "plugin_installed": "provider plugin (bgutil-ytdlp-pot-provider)",
-    "deno_ok": "Deno runtime (>= 2.0)",
+    "deno_ok": "Deno runtime (>= 2.4.3)",
     "script_found": "generate_once.ts script",
     "node_modules_found": "script dependencies (node_modules)",
 }
@@ -284,7 +286,7 @@ def test_summary_component_order_is_stable_when_all_missing() -> None:
     )
     assert status.summary() == (
         "provider plugin (bgutil-ytdlp-pot-provider), "
-        "Deno runtime (>= 2.0), "
+        "Deno runtime (>= 2.4.3), "
         "generate_once.ts script, "
         "script dependencies (node_modules)"
     )
@@ -332,17 +334,21 @@ def test_plugin_importable_false_on_value_error() -> None:
 @pytest.mark.parametrize(
     ("stdout", "expected"),
     [
-        ("deno 2.0.0 (release, x86_64-pc-windows-msvc)", True),
+        ("deno 2.4.3 (release, x86_64-pc-windows-msvc)", True),
+        ("deno 2.4.2 (release)", False),
+        ("deno 2.3.9 (release)", False),
         ("deno 1.99.99 (release)", False),
         ("deno 2.5.4 (stable)\nv8 12.4.254.21\ntypescript 5.6.2\n", True),
         ("deno    2.5.4   (release)", True),
         ("", False),
         ("deno version unknown", False),
         ("deno 2.5", False),
-        ("deno 2.0.0-rc.1 (canary)", True),
+        ("deno 2.4.3-rc.1 (canary)", True),
     ],
     ids=[
         "exact-min-boundary",
+        "just-below-min-patch",
+        "just-below-min-minor",
         "just-below-min-major",
         "multiline-first-line",
         "extra-whitespace",
@@ -690,6 +696,28 @@ def test_build_warm_cmd_escapes_literal_commas(
     assert "a,,b" in read
     assert "a,b" in cmd[-2]
     assert "a,,b" not in cmd[-2]
+
+
+def test_build_warm_cmd_realpaths_server_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Plugin 2.x realpath-resolves server_home; the warm-up argv must follow suit."""
+    link = tmp_path / "link"
+    real = tmp_path / "real"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(
+        "src.pot_provider.os.path.realpath",
+        lambda p: str(real) if Path(p) == link else str(p),
+    )
+    cmd = pot_provider.build_warm_cmd("deno", link)
+
+    ffi = next(a for a in cmd if a.startswith("--allow-ffi="))
+    read = next(a for a in cmd if a.startswith("--allow-read="))
+    assert ffi == f"--allow-ffi={real / 'node_modules'}"
+    assert str(real / "node_modules") in read
+    assert cmd[-2] == str(real / "src" / "generate_once.ts")
+    assert str(link) not in " ".join(cmd)
 
 
 # ---------------------------------------------------------------------------
