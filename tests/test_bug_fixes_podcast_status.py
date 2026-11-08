@@ -180,9 +180,20 @@ class TestLabelFromComments:
         result = self.vd._label_from_comments("", {"PLx": "label"})
         assert result is None
 
-    def test_none_returned_when_url_is_plain_string_no_query(self) -> None:
-        """Return None for a non-URL string with no query parameters."""
-        result = self.vd._label_from_comments("not-a-url", {"not-a-url": "label"})
+    def test_bare_playlist_id_line_resolves_label(self) -> None:
+        """A bare Playlist File line (no URL) is treated as the playlist id itself."""
+        result = self.vd._label_from_comments("PLbare", {"PLbare": "label"})
+        assert result == "label"
+
+    def test_none_returned_when_bare_id_not_in_comments(self) -> None:
+        """Return None for a bare id with no matching label."""
+        result = self.vd._label_from_comments("PLbare", {"PLother": "label"})
+        assert result is None
+
+    def test_none_returned_when_http_url_has_no_list_param_even_if_keyed(self) -> None:
+        """An http URL without list= never falls back to using the whole URL as an id."""
+        url = "https://example.com/page"
+        result = self.vd._label_from_comments(url, {url: "label"})
         assert result is None
 
     def test_none_returned_when_url_has_empty_list_param(self) -> None:
