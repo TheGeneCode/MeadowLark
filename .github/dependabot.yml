@@ -25,3 +25,9 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    # The plugin hard-fails on a major mismatch with the vendored server script
+    # (vendor/bgutil-pot-provider/), so a major bump must move both together by hand
+    # (see "Updating the pin" in its README). Drop this ignore once that upgrade lands.
+    ignore:
+      - dependency-name: "bgutil-ytdlp-pot-provider"
+        update-types: ["version-update:semver-major"]
