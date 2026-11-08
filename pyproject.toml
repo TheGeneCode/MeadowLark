@@ -82,6 +82,8 @@ ignore = [
     "EM101",  # String literal in exception — common pattern
     "PLR2004", # Magic value used in comparison — too broad to enforce
     "PLR0913", # Too many arguments in function definition
+    "PLR0917", # Too many positional arguments (positional sibling of PLR0913)
+    "CPY001",  # Missing copyright notice (licensing lives in LICENSE, not per-file headers)
     "PLR0911", # Too many return statements
     "FBT003",  # Boolean positional value in function call
     "BLE001",  # Blind `except Exception` — intentional defensive top-level catches
@@ -98,4 +100,4 @@ ignore = [
 "scripts/**" = ["INP001"]
 
 [tool.uv.sources]
-genekit = { git = "https://github.com/TheGeneCode/genekit", subdirectory = "python", tag = "py-v0.4.0" }
+genekit = { git = "https://github.com/TheGeneCode/genekit", subdirectory = "python", tag = "py-v0.5.0" }

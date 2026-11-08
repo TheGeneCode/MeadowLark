@@ -119,20 +119,6 @@ class QLogger(QObject):
         self._tee(logging.ERROR, msg)
         self.message_changed.emit(msg)
 
-    def exception(self, msg: str) -> None:
-        """
-        Log an exception message using the module logger and emit the message_changed signal.
-
-        Args:
-            msg (str): The exception message to log and emit.
-        """
-        logger = logging.getLogger(__name__)
-        logger.exception(msg)
-        if self._debug_logger is not None:
-            # exception() rather than _tee: keep the traceback in the capture.
-            self._debug_logger.exception(msg)
-        self.message_changed.emit(msg)
-
     # def download(self, urls, options):
     #     with YoutubeDL(options) as ydl:
     #         ydl.cache.remove()
@@ -583,7 +569,9 @@ class QYTQueue(QThread):
                 self.message_changed.emit(error_message)
                 logger = options.get("logger")
                 if isinstance(logger, QLogger):
-                    logger.exception(error_message)
+                    # error(), not exception(): no exception is being handled here,
+                    # so exception() would log a bogus "NoneType: None" traceback.
+                    logger.error(error_message)
                 meta = options.get("qmeta") or {}
                 site = meta.get("site", "unknown")
                 dtype = meta.get("type", meta.get("source", "unknown"))
