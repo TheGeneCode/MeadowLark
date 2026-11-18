@@ -10,7 +10,7 @@ from .config import PLAYLISTS_AUDIO_FILE, playlist_path_for_height
 from .logging_utils import log_exception
 from .resolutions import height_from_source, playlist_file_key
 from .settings_dialog import get_str_setting
-from .url_utils import extract_playlist_id
+from .url_utils import extract_playlist_id, host_matches
 
 
 def detect_site_from_urls(urls: list[str]) -> str:
@@ -23,10 +23,10 @@ def detect_site_from_urls(urls: list[str]) -> str:
     Returns:
         Site identifier ('youtube', 'nebula', or 'unknown').
     """
-    all_urls = " ".join(urls or []).lower()
-    if "youtube.com" in all_urls or "youtu.be" in all_urls:
+    urls = urls or []
+    if any(host_matches(u, "youtube.com", "youtu.be") for u in urls):
         return "youtube"
-    if "nebula" in all_urls or "watchnebula" in all_urls:
+    if any(host_matches(u, "nebula.tv", "nebula.app", "watchnebula.com") for u in urls):
         return "nebula"
     return "unknown"
 

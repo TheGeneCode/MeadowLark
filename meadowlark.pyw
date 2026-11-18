@@ -184,6 +184,7 @@ from src.settings_dialog import (
     get_str_setting,
 )
 from src.ui_classes import DropLabel, PlaylistButton, PlaylistDialog
+from src.url_utils import host_matches
 from src.version_utils import is_app_update_available, is_yt_dlp_update_available
 from src.window_geometry import GeometryMemoryDialog
 from src.ydl_options import (
@@ -858,7 +859,7 @@ class MyWindow(QWidget):
             properties["download_archive"] = str(ARCHIVE_PATH)
 
         # detect if YT
-        if "youtube.com" in urls[0]:
+        if host_matches(urls[0], "youtube.com"):
             # Use a custom match_filter that records live videos for later
             properties["match_filter"] = self.make_match_filter(source)
 

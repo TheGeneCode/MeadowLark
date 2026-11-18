@@ -124,6 +124,13 @@ class TestPlaylistUtils:
         assert detect_site_from_urls(["https://example.com"]) == "unknown"
         assert detect_site_from_urls([]) == "unknown"
 
+    def test_detect_site_from_urls_rejects_spoofed_host(self) -> None:
+        """Domain names outside the hostname (path, query, lookalike host) don't count."""
+        assert detect_site_from_urls(["https://evil.com/youtube.com"]) == "unknown"
+        assert detect_site_from_urls(["https://evil.com/?u=youtu.be"]) == "unknown"
+        assert detect_site_from_urls(["https://notyoutube.com/x"]) == "unknown"
+        assert detect_site_from_urls(["https://www.youtube.com/x"]) == "youtube"
+
     def test_is_primitive_technology_channel(self) -> None:
         """Test Primitive Technology channel detection."""
         assert is_primitive_technology({"channel": "Primitive Technology"})

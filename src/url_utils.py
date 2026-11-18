@@ -21,6 +21,17 @@ def web_url(value: object) -> str | None:
     return None
 
 
+def host_matches(url: str | None, *domains: str) -> bool:
+    """Return True if *url*'s hostname is one of *domains* or a subdomain of one."""
+    if not url:
+        return False
+    try:
+        host = (urlparse(url.strip()).hostname or "").lower()
+    except ValueError:
+        return False
+    return any(host == d or host.endswith(f".{d}") for d in domains)
+
+
 def extract_video_id(url: str | None) -> str | None:
     """Return the YouTube video ID from a watch URL or youtu.be short URL, or None."""
     if not url:
