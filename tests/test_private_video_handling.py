@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from src.exceptions import PodcastResolutionError
-from src.podcast_helpers import MAX_LOOKAHEAD
+from src.podcast_helpers import MAX_LOOKAHEAD, fetch_latest_accessible_entry
 
 
 def _restore_module(name: str, mod: types.ModuleType | None) -> None:
@@ -70,6 +70,11 @@ def import_vid_module():
     utils_mod.ExtractorError = ExtractorError
     utils_mod.MaxDownloadsReached = MaxDownloadsReached
 
+    # src.playlist_entry needs the real yt_dlp.extractor tree, which the fake lacks.
+    importlib.import_module("src.playlist_entry")
+    # Import qyt under the real yt_dlp so it doesn't bind to the fake-bound download_executor.
+    importlib.import_module("src.qyt")
+
     old_yt_dlp = sys.modules.get("yt_dlp")
     old_yt_dlp_utils = sys.modules.get("yt_dlp.utils")
     old_src_download_executor = sys.modules.get("src.download_executor")
@@ -98,8 +103,6 @@ def import_vid_module():
 
 
 def test_fetch_latest_accessible_entry_skips_private(monkeypatch):
-    vd = import_vid_module()
-
     class DummyYDL:
         call_count = 0
 
@@ -129,7 +132,7 @@ def test_fetch_latest_accessible_entry_skips_private(monkeypatch):
             }
 
     monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL)
-    entries, skipped, info = vd.fetch_latest_accessible_entry("http://fake-playlist")
+    entries, skipped, info = fetch_latest_accessible_entry("http://fake-playlist")
     assert skipped is True
     assert isinstance(entries, list) and len(entries) == 1
     assert entries[0]["webpage_url"] == "http://example.com/accessible"
@@ -140,8 +143,6 @@ def test_fetch_latest_accessible_entry_skips_private(monkeypatch):
 
 
 def test_fetch_latest_accessible_entry_two_private_then_good(monkeypatch):
-    vd = import_vid_module()
-
     class DummyYDL2:
         def __init__(self, opts):
             self.opts = opts
@@ -169,15 +170,13 @@ def test_fetch_latest_accessible_entry_two_private_then_good(monkeypatch):
             }
 
     monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL2)
-    entries, skipped, info = vd.fetch_latest_accessible_entry("http://fake3")
+    entries, skipped, info = fetch_latest_accessible_entry("http://fake3")
     assert skipped is True
     assert entries[0]["webpage_url"] == "http://example.com/good3"
     assert info.get("title") == "Playlist"
 
 
 def test_fetch_latest_accessible_entry_private_by_title(monkeypatch):
-    vd = import_vid_module()
-
     class DummyYDL:
         def __init__(self, opts):
             self.opts = opts
@@ -203,7 +202,7 @@ def test_fetch_latest_accessible_entry_private_by_title(monkeypatch):
             }
 
     monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL)
-    entries, skipped, info = vd.fetch_latest_accessible_entry("http://fake2")
+    entries, skipped, info = fetch_latest_accessible_entry("http://fake2")
     assert skipped is True
     assert entries[0]["webpage_url"] == "http://example.com/other"
 
@@ -263,8 +262,6 @@ def test_filter_audio_playlist_urls_with_private(monkeypatch):
 
 
 def test_fetch_latest_accessible_entry_no_accessible(monkeypatch):
-    vd = import_vid_module()
-
     class DummyYDL2:
         call_count = 0
 
@@ -288,7 +285,7 @@ def test_fetch_latest_accessible_entry_no_accessible(monkeypatch):
 
     monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL2)
     with pytest.raises(PodcastResolutionError):
-        vd.fetch_latest_accessible_entry("http://nothing")
+        fetch_latest_accessible_entry("http://nothing")
     # should have retried up to the lookup limit
     # the dummy is called once per lookahead attempt
     assert DummyYDL2.call_count == MAX_LOOKAHEAD

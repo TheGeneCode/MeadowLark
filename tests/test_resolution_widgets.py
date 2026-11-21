@@ -5,10 +5,11 @@ Covers MyWindow._build_resolution_cell, _build_resolution_container,
 _populate_resolution_grid, the reload_settings rebuild trigger, and the
 enabled-heights fallback in _download_pending_now.
 
-Critical: `enabled_heights` must be patched on the executed meadowlark module
-object (here bound to the name `vd`, via tests._vd_loader.import_vid_module),
-not on `src.settings_dialog.enabled_heights` -- patching the latter has no effect
-once meadowlark.pyw has already imported the name into its own namespace.
+Critical: `enabled_heights` must be patched on the module that owns the method
+under test -- `owner_module(vd, "<method>")` from tests._vd_loader, which resolves
+to `vd` itself or the `src.window_*` mixin module vd was loaded against -- not on
+`src.settings_dialog.enabled_heights`: patching the latter has no effect once the
+owning module has imported the name into its own namespace.
 """
 
 from pathlib import Path
@@ -21,7 +22,8 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from tests._vd_loader import import_vid_module
+from src.resolutions import RESOLUTION_PRESETS
+from tests._vd_loader import import_vid_module, owner_module
 
 # Ensure QApplication exists for Qt testing
 _app = QApplication.instance() or QApplication([])
@@ -86,7 +88,9 @@ def _build_grid(vd, window, heights: tuple[int, ...]) -> None:
     without a live Python reference it (and everything the grid owns) would be
     garbage-collected the moment this function returns.
     """
-    with patch.object(vd, "enabled_heights", return_value=heights):
+    with patch.object(
+        owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=heights
+    ):
         window._resolution_container = window._build_resolution_container()
 
 
@@ -147,7 +151,7 @@ def test_tile_source_keys_are_bare_heights(tmp_path: Path) -> None:
 def test_six_rungs_wrap_to_three_columns(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
-    all_heights = tuple(p.height for p in vd.RESOLUTION_PRESETS)
+    all_heights = tuple(p.height for p in RESOLUTION_PRESETS)
 
     _build_grid(vd, window, all_heights)
 
@@ -167,7 +171,7 @@ def test_tiles_shrink_as_count_grows(tmp_path: Path) -> None:
     assert window_small._drop_labels[1080].minimumWidth() == 150
 
     window_large = _make_window(vd, tmp_path)
-    all_heights = tuple(p.height for p in vd.RESOLUTION_PRESETS)
+    all_heights = tuple(p.height for p in RESOLUTION_PRESETS)
     _build_grid(vd, window_large, all_heights)
     assert window_large._drop_labels[all_heights[0]].minimumWidth() == 100
 
@@ -215,7 +219,9 @@ def test_rebuild_replaces_widgets(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
     _build_grid(vd, window, (1080, 720))
 
-    with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
+    with patch.object(
+        owner_module(vd, "_populate_resolution_grid"), "enabled_heights", return_value=(2160, 480)
+    ):
         window._populate_resolution_grid()  # must not raise
 
     assert set(window._drop_labels.keys()) == {2160, 480}
@@ -229,7 +235,9 @@ def test_rebuild_does_not_leak_old_rungs(tmp_path: Path) -> None:
     old_1080 = window._drop_labels[1080]
     old_720 = window._drop_labels[720]
 
-    with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
+    with patch.object(
+        owner_module(vd, "_populate_resolution_grid"), "enabled_heights", return_value=(2160, 480)
+    ):
         window._populate_resolution_grid()
 
     remaining = _all_grid_widgets(window._resolution_grid)
@@ -284,7 +292,9 @@ def test_pending_fallback_uses_highest_enabled(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
 
-    with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
+    with patch.object(
+        owner_module(vd, "_download_pending_now"), "enabled_heights", return_value=(2160, 480)
+    ):
         window._download_pending_now([{"url": "u"}])
 
     assert window.requested == [(["u"], "2160")]
@@ -295,7 +305,9 @@ def test_pending_explicit_source_bypasses_fallback(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
 
-    with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
+    with patch.object(
+        owner_module(vd, "_download_pending_now"), "enabled_heights", return_value=(2160, 480)
+    ):
         window._download_pending_now([{"url": "u", "source": "480"}])
 
     assert window.requested == [(["u"], "480")]
@@ -306,7 +318,9 @@ def test_pending_empty_string_source_falls_back(tmp_path: Path) -> None:
     vd = import_vid_module()
     window = _make_window(vd, tmp_path)
 
-    with patch.object(vd, "enabled_heights", return_value=(720,)):
+    with patch.object(
+        owner_module(vd, "_download_pending_now"), "enabled_heights", return_value=(720,)
+    ):
         window._download_pending_now([{"url": "u", "source": ""}])
 
     assert window.requested == [(["u"], "720")]
@@ -626,7 +640,9 @@ def test_audio_button_and_indicator_are_fresh_after_rebuild(tmp_path: Path) -> N
     old_button = window.buttonAudioPlaylists
     old_indicator = window.podcastIndicator
 
-    with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
+    with patch.object(
+        owner_module(vd, "_populate_resolution_grid"), "enabled_heights", return_value=(2160, 480)
+    ):
         window._populate_resolution_grid()
 
     assert window.buttonAudioPlaylists is not old_button
@@ -654,7 +670,9 @@ def test_reload_settings_applies_podcast_button_label_to_fresh_widget(
     stale_button = window.buttonAudioPlaylists
 
     with (
-        patch.object(vd, "enabled_heights", return_value=(2160,)),
+        patch.object(
+            owner_module(vd, "_populate_resolution_grid"), "enabled_heights", return_value=(2160,)
+        ),
         _patch_settings(vd, {}),
     ):
         window.reload_settings(
@@ -694,7 +712,11 @@ def _patch_settings(vd: ModuleType, values: dict[str, object]) -> Any:
     import_vid_module may re-import src.settings_dialog, so the store is reached
     through vd's own accessor rather than a module imported here.
     """
-    return patch.dict(vd.get_str_setting.__globals__["_runtime"], values, clear=True)
+    return patch.dict(
+        owner_module(vd, "_build_resolution_cell").get_str_setting.__globals__["_runtime"],
+        values,
+        clear=True,
+    )
 
 
 def test_custom_drop_label_setting_is_honored(tmp_path: Path) -> None:
@@ -702,7 +724,9 @@ def test_custom_drop_label_setting_is_honored(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
 
     with (
-        patch.object(vd, "enabled_heights", return_value=(1080,)),
+        patch.object(
+            owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=(1080,)
+        ),
         _patch_settings(vd, {"VID_DL_LABEL_DROP_1080": "My Custom Drop"}),
     ):
         window._resolution_container = window._build_resolution_container()
@@ -716,7 +740,9 @@ def test_custom_button_label_setting_is_honored(tmp_path: Path) -> None:
 
     # VID_DL_LABEL_BTN_PLAYLISTS is the legacy button-label key for 1080.
     with (
-        patch.object(vd, "enabled_heights", return_value=(1080,)),
+        patch.object(
+            owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=(1080,)
+        ),
         _patch_settings(vd, {"VID_DL_LABEL_BTN_PLAYLISTS": "Custom Button"}),
     ):
         window._resolution_container = window._build_resolution_container()
@@ -731,7 +757,9 @@ def test_custom_playlist_path_setting_is_honored(tmp_path: Path) -> None:
 
     # VID_DL_PLAYLISTS_FILE is the legacy playlist-file key for 1080.
     with (
-        patch.object(vd, "enabled_heights", return_value=(1080,)),
+        patch.object(
+            owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=(1080,)
+        ),
         _patch_settings(vd, {"VID_DL_PLAYLISTS_FILE": custom_path}),
     ):
         window._resolution_container = window._build_resolution_container()
@@ -745,7 +773,9 @@ def test_empty_string_setting_falls_back_to_default(tmp_path: Path) -> None:
     window = _make_window(vd, tmp_path)
 
     with (
-        patch.object(vd, "enabled_heights", return_value=(1080,)),
+        patch.object(
+            owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=(1080,)
+        ),
         _patch_settings(vd, {"VID_DL_LABEL_DROP_1080": "", "VID_DL_LABEL_BTN_PLAYLISTS": ""}),
     ):
         window._resolution_container = window._build_resolution_container()
@@ -768,7 +798,9 @@ def test_drop_label_falls_through_to_env_var_when_setting_unset(
     monkeypatch.setenv("VID_DL_LABEL_DROP_1080", "From Env")
 
     with (
-        patch.object(vd, "enabled_heights", return_value=(1080,)),
+        patch.object(
+            owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=(1080,)
+        ),
         _patch_settings(vd, {}),
     ):
         window._resolution_container = window._build_resolution_container()
@@ -784,7 +816,9 @@ def test_drop_label_falls_through_to_preset_label_when_nothing_set(
     monkeypatch.delenv("VID_DL_LABEL_DROP_1080", raising=False)
 
     with (
-        patch.object(vd, "enabled_heights", return_value=(1080,)),
+        patch.object(
+            owner_module(vd, "_build_resolution_container"), "enabled_heights", return_value=(1080,)
+        ),
         _patch_settings(vd, {}),
     ):
         window._resolution_container = window._build_resolution_container()
@@ -811,7 +845,9 @@ def test_reload_settings_rebuild_runs_before_audio_label_apply(tmp_path: Path) -
     stale_audio_label = window.labelAudio
 
     with (
-        patch.object(vd, "enabled_heights", return_value=(2160,)),
+        patch.object(
+            owner_module(vd, "_populate_resolution_grid"), "enabled_heights", return_value=(2160,)
+        ),
         _patch_settings(vd, {}),
     ):
         window.reload_settings(
@@ -832,7 +868,9 @@ def test_double_rebuild_in_a_row_does_not_leak_or_raise(tmp_path: Path) -> None:
     _build_grid(vd, window, (1080, 720))
     first_1080 = window._drop_labels[1080]
 
-    with patch.object(vd, "enabled_heights", return_value=(2160, 480)):
+    with patch.object(
+        owner_module(vd, "_populate_resolution_grid"), "enabled_heights", return_value=(2160, 480)
+    ):
         window._populate_resolution_grid()
         window._populate_resolution_grid()  # must not raise on the second call
 

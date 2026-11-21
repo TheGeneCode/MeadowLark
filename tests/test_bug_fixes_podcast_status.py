@@ -4,100 +4,17 @@ Boundary tests for the two Podcast-Status-window bug fixes.
 BUG 1 — _label_from_comments helper (offline label resolution).
 BUG 2 — _resolve_latest_via_ytdlp hardening + _guarded_status_action guard.
 
-Module-load pattern mirrors tests/_vd_loader.py (importlib shim that
-stubs out yt_dlp so meadowlark.pyw loads without a real Qt display).
+Loads meadowlark.pyw through tests/_vd_loader.py, which also records the
+``src.window_*`` mixin modules so patches can target the module a moved
+method actually reads its globals from.
 """
 
-import sys
 import types
 from collections.abc import Callable
 from unittest.mock import patch
 
-# ---------------------------------------------------------------------------
-# Module loader (reuses the exact shim from tests/_vd_loader.py)
-# ---------------------------------------------------------------------------
-
-
-def _restore_module(name: str, mod: types.ModuleType | None) -> None:
-    """
-    Restore (or remove) a saved module and its parent-package attribute.
-
-    exec_module re-imports popped submodules under the fake yt_dlp and rebinds
-    them on their parent package (e.g. src.ydl_utils on src).  Restoring only
-    sys.modules leaves a stale fake-bound attribute that breaks mock.patch
-    targets resolved via getattr-walk like "src.ydl_utils.yt_dlp.YoutubeDL".
-    """
-    if mod is None:
-        sys.modules.pop(name, None)
-        return
-    sys.modules[name] = mod
-    parent_name, _, child = name.rpartition(".")
-    if parent_name:
-        parent = sys.modules.get(parent_name)
-        if parent is not None:
-            setattr(parent, child, mod)
-
-
-def _import_vd() -> types.ModuleType:
-    """Load meadowlark.pyw as module 'vd' with a stubbed yt_dlp."""
-    fake = types.ModuleType("yt_dlp")
-
-    class _DummyYDL:
-        def __init__(self, opts: dict) -> None:
-            self.opts = opts
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> bool:
-            return False
-
-        def extract_info(self, url: str, download: bool = False) -> dict:
-            raise RuntimeError("unpatched DummyYDL invoked")
-
-    fake.YoutubeDL = _DummyYDL
-    utils_mod = types.ModuleType("yt_dlp.utils")
-
-    class DownloadError(Exception):
-        pass
-
-    class ExtractorError(Exception):
-        pass
-
-    class MaxDownloadsReached(Exception):
-        pass
-
-    utils_mod.DownloadError = DownloadError
-    utils_mod.ExtractorError = ExtractorError
-    utils_mod.MaxDownloadsReached = MaxDownloadsReached
-
-    saved: dict = {}
-    for key in ("yt_dlp", "yt_dlp.utils", "src.download_executor", "src.ydl_utils"):
-        saved[key] = sys.modules.get(key)
-
-    sys.modules["yt_dlp"] = fake
-    sys.modules["yt_dlp.utils"] = utils_mod
-    sys.modules.pop("src.download_executor", None)
-    sys.modules.pop("src.ydl_utils", None)
-
-    import importlib.util as _ilu
-    from pathlib import Path
-
-    repo_root = str(Path(__file__).parent.parent)
-    if repo_root not in sys.path:
-        sys.path.insert(0, repo_root)
-
-    path = str(Path(__file__).parent.parent / "meadowlark.pyw")
-    spec = _ilu.spec_from_file_location("vd_bug_fix", path)
-    vd = _ilu.module_from_spec(spec)
-    sys.modules["vd_bug_fix"] = vd
-    try:
-        spec.loader.exec_module(vd)
-    finally:
-        for key, mod in saved.items():
-            _restore_module(key, mod)
-    return vd
-
+from tests._vd_loader import import_vid_module as _import_vd
+from tests._vd_loader import owner_module, window_module
 
 # ---------------------------------------------------------------------------
 # Lightweight stub window for methods that need self.logEdit / self._podcast_last_statuses
@@ -135,22 +52,22 @@ class TestLabelFromComments:
     """Boundary tests for the module-level _label_from_comments helper."""
 
     def setup_method(self) -> None:
-        self.vd = _import_vd()
+        self.pc = window_module(_import_vd(), "podcast_check")
 
     # --- Nominal: pl_id present in comments ---
 
     def test_label_returned_when_pl_id_in_comments(self, monkeypatch) -> None:
         """Return sanitize_for_path(label) when pl_id found in comments."""
-        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s.strip())
+        monkeypatch.setattr(self.pc, "sanitize_for_path", lambda s: s.strip())
         url = "https://www.youtube.com/playlist?list=PLabc123"
-        result = self.vd._label_from_comments(url, {"PLabc123": "My Podcast"})
+        result = self.pc._label_from_comments(url, {"PLabc123": "My Podcast"})
         assert result == "My Podcast"
 
     def test_label_passes_through_sanitize_for_path(self, monkeypatch) -> None:
         """Apply sanitize_for_path transformation to the retrieved label."""
-        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s.replace(" ", "_"))
+        monkeypatch.setattr(self.pc, "sanitize_for_path", lambda s: s.replace(" ", "_"))
         url = "https://www.youtube.com/playlist?list=PLsanitize"
-        result = self.vd._label_from_comments(url, {"PLsanitize": "My Cool Show"})
+        result = self.pc._label_from_comments(url, {"PLsanitize": "My Cool Show"})
         assert result == "My_Cool_Show"
 
     # --- pl_id absent from comments ---
@@ -158,13 +75,13 @@ class TestLabelFromComments:
     def test_none_returned_when_pl_id_not_in_comments(self) -> None:
         """Return None when pl_id is extracted but absent from comments dict."""
         url = "https://www.youtube.com/playlist?list=PLnothere"
-        result = self.vd._label_from_comments(url, {"PLsomethingelse": "X"})
+        result = self.pc._label_from_comments(url, {"PLsomethingelse": "X"})
         assert result is None
 
     def test_none_returned_when_comments_empty(self) -> None:
         """Return None for any URL when comments dict is empty."""
         url = "https://www.youtube.com/playlist?list=PLanything"
-        result = self.vd._label_from_comments(url, {})
+        result = self.pc._label_from_comments(url, {})
         assert result is None
 
     # --- URL has no extractable playlist id ---
@@ -172,34 +89,34 @@ class TestLabelFromComments:
     def test_none_returned_when_url_has_no_list_param(self) -> None:
         """Return None when URL has no ?list= parameter."""
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        result = self.vd._label_from_comments(url, {"PLx": "label"})
+        result = self.pc._label_from_comments(url, {"PLx": "label"})
         assert result is None
 
     def test_none_returned_when_url_is_empty_string(self) -> None:
         """Return None for an empty string URL."""
-        result = self.vd._label_from_comments("", {"PLx": "label"})
+        result = self.pc._label_from_comments("", {"PLx": "label"})
         assert result is None
 
     def test_bare_playlist_id_line_resolves_label(self) -> None:
         """A bare Playlist File line (no URL) is treated as the playlist id itself."""
-        result = self.vd._label_from_comments("PLbare", {"PLbare": "label"})
+        result = self.pc._label_from_comments("PLbare", {"PLbare": "label"})
         assert result == "label"
 
     def test_none_returned_when_bare_id_not_in_comments(self) -> None:
         """Return None for a bare id with no matching label."""
-        result = self.vd._label_from_comments("PLbare", {"PLother": "label"})
+        result = self.pc._label_from_comments("PLbare", {"PLother": "label"})
         assert result is None
 
     def test_none_returned_when_http_url_has_no_list_param_even_if_keyed(self) -> None:
         """An http URL without list= never falls back to using the whole URL as an id."""
         url = "https://example.com/page"
-        result = self.vd._label_from_comments(url, {url: "label"})
+        result = self.pc._label_from_comments(url, {url: "label"})
         assert result is None
 
     def test_none_returned_when_url_has_empty_list_param(self) -> None:
         """Return None when URL has list= but empty value (pl_id is falsy)."""
         url = "https://www.youtube.com/playlist?list="
-        result = self.vd._label_from_comments(url, {"": "should_not_match"})
+        result = self.pc._label_from_comments(url, {"": "should_not_match"})
         # extract_playlist_id returns "" for an empty list param; "" is falsy
         assert result is None
 
@@ -213,9 +130,9 @@ class TestLabelFromComments:
         fallback activates — that is the correct behaviour.  This test documents
         the contract so the interaction is not silently changed.
         """
-        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s)
+        monkeypatch.setattr(self.pc, "sanitize_for_path", lambda s: s)
         url = "https://www.youtube.com/playlist?list=PLempty"
-        result = self.vd._label_from_comments(url, {"PLempty": ""})
+        result = self.pc._label_from_comments(url, {"PLempty": ""})
         assert not result  # "" is falsy — callers' `or fallback` will engage
 
 
@@ -228,17 +145,18 @@ class TestResolveLatestViaYtdlp:
     """
     Tests for MyWindow._resolve_latest_via_ytdlp.
 
-    meadowlark.pyw imports ``extract_playlist_info`` from src.ydl_utils into its
-    own module namespace, so tests patch that bound name (``vd.extract_playlist_info``)
-    rather than the source module.
+    The method's module imports ``extract_playlist_info`` from src.ydl_utils into its
+    own namespace, so tests patch that bound name on ``owner_module`` rather than the
+    source module.
     """
 
     def setup_method(self) -> None:
         self.vd = _import_vd()
+        self.mod = owner_module(self.vd, "_resolve_latest_via_ytdlp")
 
     def _call(self, win, playlist_url: str, info_return_value: object) -> dict | None:
         """Invoke _resolve_latest_via_ytdlp with a mocked extract_playlist_info."""
-        with patch.object(self.vd, "extract_playlist_info", return_value=info_return_value):
+        with patch.object(self.mod, "extract_playlist_info", return_value=info_return_value):
             return self.vd.MyWindow._resolve_latest_via_ytdlp(win, playlist_url)
 
     def _make_win(self):
@@ -331,7 +249,7 @@ class TestResolveLatestViaYtdlp:
 
     def test_module_binds_extract_playlist_info_from_ydl_utils(self) -> None:
         """
-        meadowlark.pyw must bind the real extract_playlist_info.
+        The method's module must bind the real extract_playlist_info.
 
         Regression guard for the silent-crash bug: the call used to be
         ``utils.extract_playlist_info`` which does not exist and raised
@@ -341,8 +259,8 @@ class TestResolveLatestViaYtdlp:
         (_import_vd reloads src.ydl_utils in isolation, so we assert the
         function's origin rather than object identity.)
         """
-        fn = getattr(self.vd, "extract_playlist_info", None)
-        assert callable(fn), "meadowlark must bind a callable extract_playlist_info"
+        fn = getattr(self.mod, "extract_playlist_info", None)
+        assert callable(fn), "owner module must bind a callable extract_playlist_info"
         assert fn.__module__ == "src.ydl_utils"
         assert fn.__name__ == "extract_playlist_info"
 
@@ -353,14 +271,14 @@ class TestResolveLatestViaYtdlp:
         vd = self.vd
         win = self._make_win()
         ydl_error_class = (
-            vd.YDL_COMMON_ERRORS[0]
-            if isinstance(vd.YDL_COMMON_ERRORS, tuple)
-            else vd.YDL_COMMON_ERRORS
+            self.mod.YDL_COMMON_ERRORS[0]
+            if isinstance(self.mod.YDL_COMMON_ERRORS, tuple)
+            else self.mod.YDL_COMMON_ERRORS
         )
 
         with (
-            patch.object(vd, "extract_playlist_info", side_effect=ydl_error_class("err")),
-            patch.object(self.vd, "log_exception"),
+            patch.object(self.mod, "extract_playlist_info", side_effect=ydl_error_class("err")),
+            patch.object(self.mod, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/err")
         assert result is None
@@ -379,7 +297,7 @@ class TestResolveLatestViaYtdlp:
         win = self._make_win()
 
         with (
-            patch.object(vd, "extract_playlist_info", side_effect=ValueError("bad")),
+            patch.object(self.mod, "extract_playlist_info", side_effect=ValueError("bad")),
             pytest.raises(ValueError, match="bad"),
         ):
             vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/valuerr")
@@ -419,12 +337,12 @@ class TestResolveLatestViaYtdlp:
         """Recover the watch URL from a premiere error that yields no entry."""
         vd = self.vd
         win = self._make_win()
-        download_error = vd.YDL_COMMON_ERRORS[0]
+        download_error = self.mod.YDL_COMMON_ERRORS[0]
         err = "ERROR: [youtube] dQw4w9WgXcQ: This live event will begin in 2 hours."
 
         with (
-            patch.object(vd, "extract_playlist_info", side_effect=download_error(err)),
-            patch.object(self.vd, "log_exception"),
+            patch.object(self.mod, "extract_playlist_info", side_effect=download_error(err)),
+            patch.object(self.mod, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/premiere")
         assert result is not None
@@ -437,11 +355,13 @@ class TestResolveLatestViaYtdlp:
         """Return None (regression guard) when the error names no video ID."""
         vd = self.vd
         win = self._make_win()
-        download_error = vd.YDL_COMMON_ERRORS[0]
+        download_error = self.mod.YDL_COMMON_ERRORS[0]
 
         with (
-            patch.object(vd, "extract_playlist_info", side_effect=download_error("network down")),
-            patch.object(self.vd, "log_exception"),
+            patch.object(
+                self.mod, "extract_playlist_info", side_effect=download_error("network down")
+            ),
+            patch.object(self.mod, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/nodverr")
         assert result is None
@@ -476,6 +396,7 @@ class TestGuardedStatusAction:
 
     def setup_method(self) -> None:
         self.vd = _import_vd()
+        self.mod = owner_module(self.vd, "_guarded_status_action")
 
     def _call_guard(
         self,
@@ -493,7 +414,7 @@ class TestGuardedStatusAction:
         vd = self.vd
         win = _make_stub_win(vd)
 
-        with patch.object(self.vd, "log_exception"):
+        with patch.object(self.mod, "log_exception"):
             self._call_guard(win, _raise(RuntimeError("oops")), 0)
         # reaching here means no exception escaped
 
@@ -502,7 +423,7 @@ class TestGuardedStatusAction:
         vd = self.vd
         win = _make_stub_win(vd)
 
-        with patch.object(self.vd, "log_exception"):
+        with patch.object(self.mod, "log_exception"):
             self._call_guard(
                 win,
                 _raise(RuntimeError("boom")),
@@ -518,7 +439,7 @@ class TestGuardedStatusAction:
         vd = self.vd
         win = _make_stub_win(vd)
 
-        with patch.object(self.vd, "log_exception") as mock_log_exc:
+        with patch.object(self.mod, "log_exception") as mock_log_exc:
             self._call_guard(win, _raise(RuntimeError("detail")), 0)
         mock_log_exc.assert_called_once()
 
@@ -529,7 +450,7 @@ class TestGuardedStatusAction:
         vd = self.vd
         win = _make_stub_win(vd)
 
-        with patch.object(self.vd, "log_exception"):
+        with patch.object(self.mod, "log_exception"):
             self._call_guard(
                 win,
                 _raise(AttributeError("NoneType has no .get")),
@@ -564,7 +485,7 @@ class TestGuardedStatusAction:
             data: list[int] = []
             _ = data[row]  # raises IndexError for row=-1
 
-        with patch.object(self.vd, "log_exception"):
+        with patch.object(self.mod, "log_exception"):
             self._call_guard(win, _action_with_index, -1, error_label="bad index")
         assert any("bad index" in line for line in win._logged_lines)
 
@@ -599,7 +520,7 @@ class TestGuardedStatusAction:
         def _capture_log_exc(exc: object, msg: str) -> None:
             logged_msgs.append(msg)
 
-        with patch.object(self.vd, "log_exception", side_effect=_capture_log_exc):
+        with patch.object(self.mod, "log_exception", side_effect=_capture_log_exc):
             self._call_guard(
                 win,
                 _raise(ValueError("x")),
@@ -630,7 +551,7 @@ class TestGuardedStatusAction:
                 "_resolve_latest_via_ytdlp",
                 side_effect=AttributeError("'NoneType' object has no attribute 'get'"),
             ),
-            patch.object(self.vd, "log_exception"),
+            patch.object(self.mod, "log_exception"),
             patch.object(vd.MyWindow, "_cache_get_fresh", return_value=None),
         ):
             self._call_guard(
@@ -844,7 +765,7 @@ class TestLabelFromCommentsAdditional:
     """Additional boundary cases not covered in TestLabelFromComments."""
 
     def setup_method(self) -> None:
-        self.vd = _import_vd()
+        self.pc = window_module(_import_vd(), "podcast_check")
 
     def test_whitespace_only_comment_returns_misc_not_url_fallback(self) -> None:
         """
@@ -856,21 +777,21 @@ class TestLabelFromCommentsAdditional:
         any future strip-before-store fix is guarded by a regression test.
         """
         url = "https://www.youtube.com/playlist?list=PLws"
-        result = self.vd._label_from_comments(url, {"PLws": "  "})
+        result = self.pc._label_from_comments(url, {"PLws": "  "})
         # "  " → sanitize_for_path → "" → "misc"
         assert result == "misc"
 
     def test_label_with_windows_invalid_chars_is_sanitized(self, monkeypatch) -> None:
         """Labels with Windows-invalid characters pass through sanitize_for_path."""
-        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s.replace(":", "_"))
+        monkeypatch.setattr(self.pc, "sanitize_for_path", lambda s: s.replace(":", "_"))
         url = "https://www.youtube.com/playlist?list=PLcolon"
-        result = self.vd._label_from_comments(url, {"PLcolon": "Show: The Podcast"})
+        result = self.pc._label_from_comments(url, {"PLcolon": "Show: The Podcast"})
         assert result == "Show_ The Podcast"
 
     def test_url_with_extra_query_params_still_extracts_list(self) -> None:
         """Extract pl_id correctly when URL has multiple query parameters."""
         url = "https://www.youtube.com/playlist?si=abc&list=PLmulti&index=1"
-        result = self.vd._label_from_comments(url, {"PLmulti": "Multi Param Show"})
+        result = self.pc._label_from_comments(url, {"PLmulti": "Multi Param Show"})
         assert result == "Multi Param Show"
 
 
@@ -894,21 +815,22 @@ class TestScheduledPremiereStatus:
     def test_scheduled_premiere_status_carries_latest_url(self, monkeypatch) -> None:
         """Recover latest_url for a scheduled premiere that errors before yielding."""
         vd = self.vd
+        pc = owner_module(vd, "_filter_audio_playlist_urls")
 
-        monkeypatch.setattr(self.vd, "load_playlist_comments_for_source", lambda _: {})
-        monkeypatch.setattr(self.vd, "sanitize_for_path", lambda s: s)
+        monkeypatch.setattr(pc, "load_playlist_comments_for_source", lambda _: {})
+        monkeypatch.setattr(pc, "sanitize_for_path", lambda s: s)
 
         from tests._vd_loader import _make_dummy_win
 
         win = _make_dummy_win(vd)
         url = "https://www.youtube.com/playlist?list=PLx"
-        download_error = vd.YDL_EXTRACTION_ERRORS[0]
+        download_error = pc.YDL_EXTRACTION_ERRORS[0]
         err = "ERROR: [youtube] dQw4w9WgXcQ: This live event will begin in 5 hours."
 
         # ydl_opts={} → archive_path is None → load_downloaded_video_ids(None)
         # returns an empty set, so the cache branch is skipped and the premiere
         # error propagates straight into the scheduled-error handler.
-        with patch.object(vd, "fetch_latest_accessible_entry", side_effect=download_error(err)):
+        with patch.object(pc, "fetch_latest_accessible_entry", side_effect=download_error(err)):
             _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(win, [url], {})
 
         assert len(statuses) == 1
@@ -936,6 +858,7 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
 
     def setup_method(self) -> None:
         self.vd = _import_vd()
+        self.pc = owner_module(self.vd, "_filter_audio_playlist_urls")
 
     def _run(self, url: str, error: Exception, ydl_opts: dict | None = None):
         """Run _filter_audio_playlist_urls with a fetch that always raises ``error``."""
@@ -944,14 +867,14 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
         vd = self.vd
         with (
             patch.object(
-                self.vd,
+                self.pc,
                 "load_playlist_comments_for_source",
                 return_value={},
             ),
-            patch.object(self.vd, "sanitize_for_path", lambda s: s),
+            patch.object(self.pc, "sanitize_for_path", lambda s: s),
         ):
             win = _make_dummy_win(vd)
-            with patch.object(vd, "fetch_latest_accessible_entry", side_effect=error):
+            with patch.object(self.pc, "fetch_latest_accessible_entry", side_effect=error):
                 return vd.MyWindow._filter_audio_playlist_urls(win, [url], ydl_opts or {})
 
     def test_scheduled_premiere_without_video_id_still_upcoming(self) -> None:
@@ -962,8 +885,7 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
         ``parse_video_id_from_error`` returns None (so the ``if vid:`` block
         is skipped and ``extra`` only contains ``recheck_ts``).
         """
-        vd = self.vd
-        download_error = vd.YDL_EXTRACTION_ERRORS[0]
+        download_error = self.pc.YDL_EXTRACTION_ERRORS[0]
         # Error has a schedule time but uses a 34-char playlist ID,
         # which parse_video_id_from_error must ignore.
         err = (
@@ -986,8 +908,7 @@ class TestFilterAudioPlaylistUrlsEdgeCases:
 
         had_error must be True in this case.
         """
-        vd = self.vd
-        download_error = vd.YDL_EXTRACTION_ERRORS[0]
+        download_error = self.pc.YDL_EXTRACTION_ERRORS[0]
         err = "Network unreachable"
         url = "https://www.youtube.com/playlist?list=PLerror"
 
@@ -1069,18 +990,19 @@ class TestResolveLatestViaYtdlpTsNone:
 
     def setup_method(self) -> None:
         self.vd = _import_vd()
+        self.mod = owner_module(self.vd, "_resolve_latest_via_ytdlp")
 
     def test_recover_video_id_with_ts_none_when_no_schedule_phrase(self) -> None:
         """Return {url: ..., ts: None} when error names a video but no schedule info."""
         vd = self.vd
         win = _make_stub_win(vd)
-        download_error = vd.YDL_COMMON_ERRORS[0]
+        download_error = self.mod.YDL_COMMON_ERRORS[0]
         # Names a valid 11-char ID but has no "will begin in" or "scheduled to begin"
         err = "ERROR: [youtube] dQw4w9WgXcQ: Members-only content unavailable."
 
         with (
-            patch.object(vd, "extract_playlist_info", side_effect=download_error(err)),
-            patch.object(self.vd, "log_exception"),
+            patch.object(self.mod, "extract_playlist_info", side_effect=download_error(err)),
+            patch.object(self.mod, "log_exception"),
         ):
             result = vd.MyWindow._resolve_latest_via_ytdlp(win, "http://pl/members")
 

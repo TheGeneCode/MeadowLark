@@ -2,42 +2,10 @@
     "files": {
         "./meadowlark.pyw": [
             {
-                "code": "reportCallIssue",
-                "range": {
-                    "startColumn": 23,
-                    "endColumn": 52,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportArgumentType",
                 "range": {
                     "startColumn": 20,
                     "endColumn": 58,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 33,
-                    "endColumn": 53,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 29,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 24,
-                    "endColumn": 33,
                     "lineCount": 1
                 }
             }
@@ -851,62 +819,6 @@
             }
         ],
         "./tests/test_bug_fixes_podcast_status.py": [
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 9,
-                    "endColumn": 18,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 14,
-                    "endColumn": 27,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 14,
-                    "endColumn": 28,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportAttributeAccessIssue",
-                "range": {
-                    "startColumn": 14,
-                    "endColumn": 33,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 31,
-                    "endColumn": 35,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 13,
-                    "endColumn": 19,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 20,
-                    "endColumn": 31,
-                    "lineCount": 1
-                }
-            },
             {
                 "code": "reportAttributeAccessIssue",
                 "range": {
@@ -2147,22 +2059,6 @@
             }
         ],
         "./tests/test_failed_downloads_reopen.py": [
-            {
-                "code": "reportMissingImports",
-                "range": {
-                    "startColumn": 11,
-                    "endColumn": 21,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportMissingImports",
-                "range": {
-                    "startColumn": 11,
-                    "endColumn": 21,
-                    "lineCount": 1
-                }
-            },
             {
                 "code": "reportMissingImports",
                 "range": {

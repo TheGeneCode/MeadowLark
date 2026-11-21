@@ -30,6 +30,20 @@ def _restore_module(name: str, mod: types.ModuleType | None) -> None:
             setattr(parent, child, mod)
 
 
+# ``src.window_*`` modules with no yt_dlp tie: tests patch them directly via ``sys.modules``,
+# so re-importing them per load would leave ``vd`` bound to a different module object.
+_WINDOW_NON_MIXINS = frozenset({"src.window_base", "src.window_geometry"})
+
+
+def _window_mods() -> dict[str, types.ModuleType]:
+    """Snapshot loaded ``src.window_*`` mixin modules (those that may bind the fake yt_dlp)."""
+    return {
+        n: m
+        for n, m in sys.modules.items()
+        if n.startswith("src.window_") and n not in _WINDOW_NON_MIXINS
+    }
+
+
 def import_vid_module():
     # src.playlist_entry needs the real yt_dlp.extractor tree, which the fake below lacks;
     # cache it under the real package so meadowlark.pyw's import of it reuses that.
@@ -69,10 +83,15 @@ def import_vid_module():
     old_yt_dlp_utils = sys.modules.get("yt_dlp.utils")
     old_src_download_executor = sys.modules.get("src.download_executor")
     old_src_ydl_utils = sys.modules.get("src.ydl_utils")
+    # src.window_* mixins must be re-imported under the fake yt_dlp too (window_base has no
+    # yt_dlp dependency, so it is shared).
+    old_window_mods = _window_mods()
     sys.modules["yt_dlp"] = fake
     sys.modules["yt_dlp.utils"] = utils_mod
     sys.modules.pop("src.download_executor", None)
     sys.modules.pop("src.ydl_utils", None)
+    for n in old_window_mods:
+        sys.modules.pop(n, None)
 
     path = str(Path(__file__).parent.parent / "meadowlark.pyw")
     repo_root = str(Path(path).parent)
@@ -84,12 +103,44 @@ def import_vid_module():
     sys.modules["vd"] = vd
     try:
         spec.loader.exec_module(vd)
+        # Capture the mixin modules vd was built against before sys.modules is restored, so
+        # tests can patch the globals moved methods actually read (see owner_module).
+        vars(vd)["_window_modules"] = _window_mods()
     finally:
         _restore_module("yt_dlp", old_yt_dlp)
         _restore_module("yt_dlp.utils", old_yt_dlp_utils)
         _restore_module("src.download_executor", old_src_download_executor)
         _restore_module("src.ydl_utils", old_src_ydl_utils)
+        new_window_names = [n for n in _window_mods() if n not in old_window_mods]
+        src_pkg = sys.modules.get("src")
+        for n in new_window_names:
+            _restore_module(n, None)
+            if src_pkg is not None:
+                child = n.rpartition(".")[2]
+                if child in vars(src_pkg):
+                    delattr(src_pkg, child)
+        for n, m in old_window_mods.items():
+            _restore_module(n, m)
     return vd
+
+
+def owner_module(vd: types.ModuleType, method: str) -> types.ModuleType:
+    """
+    Return the module whose globals ``vd.MyWindow.<method>`` resolves names in.
+
+    Patch through this instead of ``vd`` so a test keeps targeting the right module when a
+    method moves into a ``src.window_*`` mixin.
+    """
+    func = getattr(vd.MyWindow, method)
+    name = func.__module__
+    if name == vd.__name__:
+        return vd
+    return vd._window_modules[name]
+
+
+def window_module(vd: types.ModuleType, name: str) -> types.ModuleType:
+    """Return the ``src.window_<name>`` module ``vd`` was loaded against."""
+    return vd._window_modules[f"src.window_{name}"]
 
 
 def _make_dummy_win(vd: types.ModuleType, *, cache: dict | None = None):

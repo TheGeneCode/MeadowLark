@@ -43,13 +43,13 @@ def _make_window() -> MagicMock:
 # Shared patch targets
 # ---------------------------------------------------------------------------
 
-_GET_SETTING = "meadowlark.get_setting"
-_PERSIST_SETTING = "meadowlark._persist_setting"
-_START_CHECK = "meadowlark._maybe_start_auto_app_update_check"  # unused; use instance
-_QMSGBOX = "meadowlark.QMessageBox"
-_WEBBROWSER = "meadowlark.webbrowser"
-_DATE = "meadowlark.date"
-_DATETIME = "meadowlark.datetime"
+_GET_SETTING = "src.window_settings.get_setting"
+_PERSIST_SETTING = "src.window_settings._persist_setting"
+_START_CHECK = "src.window_settings._maybe_start_auto_app_update_check"  # unused; use instance
+_QMSGBOX = "src.window_settings.QMessageBox"
+_WEBBROWSER = "src.window_settings.webbrowser"
+_DATE = "src.window_settings.date"
+_DATETIME = "src.window_settings.datetime"
 
 
 def _freeze_today(today: date) -> tuple[MagicMock, MagicMock]:

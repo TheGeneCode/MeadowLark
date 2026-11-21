@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tests._vd_loader import _make_dummy_win, import_vid_module
+from tests._vd_loader import _make_dummy_win, import_vid_module, owner_module
 
 
 def _expected_local_date(ts: float) -> str:
@@ -43,10 +43,11 @@ def _entry(**overrides) -> dict:
 def _run(vd, monkeypatch, tmp_path, entry, *, archived_ids=(), cache=None) -> dict:
     """Run the live filter for URL against a one-entry playlist; return its status row."""
     monkeypatch.setattr("src.qyt.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
-    monkeypatch.setattr(vd, "load_playlist_comments_for_source", lambda _source: {})
+    pc = owner_module(vd, "_filter_audio_playlist_urls")
+    monkeypatch.setattr(pc, "load_playlist_comments_for_source", lambda _source: {})
     archive = tmp_path / "archive.txt"
     archive.write_text("".join(f"youtube {v}\n" for v in archived_ids), encoding="utf-8")
-    monkeypatch.setattr(vd, "fetch_latest_accessible_entry", lambda _url: ([entry], False, {}))
+    monkeypatch.setattr(pc, "fetch_latest_accessible_entry", lambda _url: ([entry], False, {}))
     win = _make_dummy_win(vd, cache=cache)
     _, _, _, _, statuses = vd.MyWindow._filter_audio_playlist_urls(
         win, [URL], {"download_archive": str(archive)}
@@ -123,7 +124,8 @@ def test_filter_ignores_fresh_cache_entry_and_always_calls_fetch(vd, monkeypatch
     yt-dlp, matching the hourly-check UI promise.
     """
     monkeypatch.setattr("src.qyt.HistoryLogger.HISTORY_PATH", tmp_path / "history_log.txt")
-    monkeypatch.setattr(vd, "load_playlist_comments_for_source", lambda _source: {})
+    pc = owner_module(vd, "_filter_audio_playlist_urls")
+    monkeypatch.setattr(pc, "load_playlist_comments_for_source", lambda _source: {})
     archive = tmp_path / "archive.txt"
     archive.write_text("", encoding="utf-8")
     entry = _entry()
@@ -133,7 +135,7 @@ def test_filter_ignores_fresh_cache_entry_and_always_calls_fetch(vd, monkeypatch
         calls.append(url)
         return [entry], False, {}
 
-    monkeypatch.setattr(vd, "fetch_latest_accessible_entry", fake_fetch)
+    monkeypatch.setattr(pc, "fetch_latest_accessible_entry", fake_fetch)
     fresh_cache = {
         URL: {
             "latest_url": entry["webpage_url"],

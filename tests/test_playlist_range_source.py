@@ -14,6 +14,7 @@ from typing import Self
 
 import meadowlark
 import pytest
+import yt_dlp
 
 from src.ydl_options import build_shared_extraction_opts
 
@@ -82,7 +83,9 @@ _PLAYLIST_URL = "https://www.youtube.com/playlist?list=PLURDJQcufUYbVKtzNBG_A9mW
 def window(monkeypatch: pytest.MonkeyPatch) -> _StubWindow:
     """Return a stub window whose playlist dialog is accepted without Qt or network work."""
     monkeypatch.setattr(meadowlark, "PlaylistDialog", _AcceptingDialog)
-    monkeypatch.setattr(meadowlark.yt_dlp, "YoutubeDL", _FlatExtractor)
+    # Patched on yt_dlp itself, the module object every importer shares (meadowlark.pyw no
+    # longer imports it).
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", _FlatExtractor)
     return _StubWindow()
 
 
@@ -118,7 +121,7 @@ def test_cancelled_playlist_dialog_still_returns_none(
 ) -> None:
     """Cancelling the range dialog cancels the download."""
     monkeypatch.setattr(meadowlark, "PlaylistDialog", _CancellingDialog)
-    monkeypatch.setattr(meadowlark.yt_dlp, "YoutubeDL", _FlatExtractor)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", _FlatExtractor)
     assert _StubWindow().get_options([_PLAYLIST_URL], "1080") is None
 
 
@@ -144,7 +147,7 @@ def test_playlist_url_on_an_already_playlist_source_skips_the_dialog(
             raise AssertionError("extract_flat lookup must not run")
 
     monkeypatch.setattr(meadowlark, "PlaylistDialog", _ExplodingDialog)
-    monkeypatch.setattr(meadowlark.yt_dlp, "YoutubeDL", _ExplodingExtractor)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", _ExplodingExtractor)
 
     options = _StubWindow().get_options([_PLAYLIST_URL], "1080playlists")
 

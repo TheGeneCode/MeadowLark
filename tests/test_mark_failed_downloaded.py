@@ -43,7 +43,7 @@ def test_appends_video_id_to_archive_and_deletes_record(tmp_path: Path) -> None:
     win = _make_window()
     record = _record()
 
-    with patch("meadowlark.ARCHIVE_PATH", archive_file):
+    with patch("src.window_download_lists.ARCHIVE_PATH", archive_file):
         win._mark_failed_downloaded([record])
 
     assert "abc123" in load_downloaded_video_ids(str(archive_file))
@@ -57,7 +57,7 @@ def test_does_not_duplicate_id_already_in_archive(tmp_path: Path) -> None:
     win = _make_window()
     record = _record()
 
-    with patch("meadowlark.ARCHIVE_PATH", archive_file):
+    with patch("src.window_download_lists.ARCHIVE_PATH", archive_file):
         win._mark_failed_downloaded([record])
 
     assert archive_file.read_text(encoding="utf-8").count("abc123") == 1
@@ -69,7 +69,7 @@ def test_no_op_when_video_id_not_extractable(tmp_path: Path) -> None:
     win = _make_window()
     record = _record(urls=["https://www.youtube.com/playlist?list=PLx"])
 
-    with patch("meadowlark.ARCHIVE_PATH", archive_file):
+    with patch("src.window_download_lists.ARCHIVE_PATH", archive_file):
         win._mark_failed_downloaded([record])
 
     assert not archive_file.exists()
@@ -91,8 +91,8 @@ def test_oserror_on_archive_write_logs_and_does_not_delete(tmp_path: Path) -> No
     record = _record()
 
     with (
-        patch("meadowlark.ARCHIVE_PATH", archive_file),
-        patch("meadowlark.log_exception") as mock_log_exception,
+        patch("src.window_download_lists.ARCHIVE_PATH", archive_file),
+        patch("src.window_download_lists.log_exception") as mock_log_exception,
         patch.object(type(archive_file), "open", side_effect=OSError("disk full")),
     ):
         win._mark_failed_downloaded([record])
@@ -109,7 +109,7 @@ def test_mark_batch_appends_each_new_id_once(tmp_path: Path) -> None:
     record_2 = _record(key="k2", urls=["https://www.youtube.com/watch?v=def456"])
     record_3 = _record(key="k3", urls=["https://youtu.be/abc123"])
 
-    with patch("meadowlark.ARCHIVE_PATH", archive_file):
+    with patch("src.window_download_lists.ARCHIVE_PATH", archive_file):
         win._mark_failed_downloaded([record_1, record_2, record_3])
 
     ids = load_downloaded_video_ids(str(archive_file))
@@ -127,7 +127,7 @@ def test_mark_batch_skips_ineligible_records(tmp_path: Path) -> None:
     playlist_record = _record(key="playlist-k", urls=["https://www.youtube.com/playlist?list=PLx"])
     watch_record = _record(key="watch-k", urls=["https://www.youtube.com/watch?v=abc123"])
 
-    with patch("meadowlark.ARCHIVE_PATH", archive_file):
+    with patch("src.window_download_lists.ARCHIVE_PATH", archive_file):
         win._mark_failed_downloaded([playlist_record, watch_record])
 
     win._delete_failed_downloads.assert_called_once_with(["watch-k"])
@@ -179,7 +179,7 @@ def test_history_success_clears_matching_failure(tmp_path: Path) -> None:
     add_failed_download(store, record)
     win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
 
-    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+    with patch("src.window_download_lists.FAILED_DOWNLOADS_FILE", store):
         win._on_history_entry_added({"result": "SUCCESS", "url": "https://youtu.be/abc123"})
 
     win._delete_failed_downloads.assert_called_once_with(["k1"])
@@ -192,7 +192,7 @@ def test_history_fail_entry_does_not_clear(tmp_path: Path) -> None:
     add_failed_download(store, _record(key="k1", urls=["https://youtu.be/abc123"]))
     win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
 
-    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+    with patch("src.window_download_lists.FAILED_DOWNLOADS_FILE", store):
         win._on_history_entry_added({"result": "FAIL", "url": "https://youtu.be/abc123"})
 
     win._delete_failed_downloads.assert_not_called()
@@ -205,7 +205,7 @@ def test_history_success_no_match_no_refresh(tmp_path: Path) -> None:
     add_failed_download(store, _record(key="k1", urls=["https://youtu.be/abc123"]))
     win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
 
-    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+    with patch("src.window_download_lists.FAILED_DOWNLOADS_FILE", store):
         win._on_history_entry_added(
             {"result": "SUCCESS", "url": "https://www.youtube.com/watch?v=other"}
         )
@@ -217,7 +217,7 @@ def test_history_success_empty_store(tmp_path: Path) -> None:
     store = tmp_path / "does-not-exist.json"
     win = _make_window("_on_history_entry_added", "_clear_resolved_failures")
 
-    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+    with patch("src.window_download_lists.FAILED_DOWNLOADS_FILE", store):
         win._on_history_entry_added({"result": "SUCCESS", "url": "https://youtu.be/abc123"})
 
     win._delete_failed_downloads.assert_not_called()
@@ -233,8 +233,8 @@ def test_clear_resolved_failures_oserror_logged_and_swallowed(tmp_path: Path) ->
     win._delete_failed_downloads.side_effect = OSError("disk full")
 
     with (
-        patch("meadowlark.FAILED_DOWNLOADS_FILE", store),
-        patch("meadowlark.log_exception") as mock_log_exception,
+        patch("src.window_download_lists.FAILED_DOWNLOADS_FILE", store),
+        patch("src.window_download_lists.log_exception") as mock_log_exception,
     ):
         win._clear_resolved_failures("https://youtu.be/abc123")
 
@@ -251,7 +251,7 @@ def test_delete_batch_one_write_one_refresh(tmp_path: Path) -> None:
 
     win = _make_window("_delete_failed_downloads")
 
-    with patch("meadowlark.FAILED_DOWNLOADS_FILE", store):
+    with patch("src.window_download_lists.FAILED_DOWNLOADS_FILE", store):
         win._delete_failed_downloads(["k1", "k2"])
 
     from src.failed_downloads import load_failed_downloads

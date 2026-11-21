@@ -21,7 +21,7 @@ from src.pending_queue import (
     save_pending_queue,
 )
 from src.ydl_options import build_podcast_outtmpl, podcast_base_dir
-from tests._vd_loader import import_vid_module
+from tests._vd_loader import import_vid_module, owner_module
 
 SHOW = "Android Faithful"
 
@@ -164,7 +164,7 @@ def test_window_check_pending_queue_restores_show_folder(tmp_path: Path) -> None
 
     ydl = MagicMock()
     ydl.extract_info.return_value = {"is_live": False, "live_status": None}
-    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+    with patch.object(owner_module(vd, "check_pending_queue").yt_dlp, "YoutubeDL") as mock_ydl:
         mock_ydl.return_value.__enter__.return_value = ydl
         DummyWin().check_pending_queue()
 

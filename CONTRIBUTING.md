@@ -14,7 +14,7 @@ See [Developer Setup](README.md#developer-setup) in the README for cloning, inst
 - **Types:** annotate every function. `uv run basedpyright` must report no errors beyond
   `.basedpyright/baseline.json` — never add to the baseline.
 - **Size and reuse:** keep modules under ~1000 lines and don't duplicate logic — extract a
-  parameterized function instead.
+  parameterized function instead (enforced by `tests/test_module_size.py`).
 - **Tests:** add or update tests for any behaviour change (`tests/`, pytest).
 
 ## Before Opening a PR

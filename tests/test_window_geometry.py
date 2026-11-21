@@ -177,9 +177,10 @@ class TestPodcastStatusWindowGeometry:
         return _StubWindow()
 
     def test_dialog_reopens_at_last_closed_size(self) -> None:
-        from tests._vd_loader import import_vid_module
+        from tests._vd_loader import import_vid_module, window_module
 
         vd = import_vid_module()
+        default_size = window_module(vd, "podcast_status")._PODCAST_STATUS_DEFAULT_SIZE
         store: dict = {}
         with (
             patch("src.window_geometry.get_setting", store.get),
@@ -188,7 +189,7 @@ class TestPodcastStatusWindowGeometry:
             window = self._stub_window(vd)
             window._show_podcast_status()
             first = window._podcast_status_dialog
-            assert (first.width(), first.height()) == vd._PODCAST_STATUS_DEFAULT_SIZE
+            assert (first.width(), first.height()) == default_size
             first.resize(640, 480)
             first.close()
 

@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from tests._vd_loader import import_vid_module
+from tests._vd_loader import import_vid_module, owner_module
 
 PL = "PL" + "a" * 32
 WATCH = "https://www.youtube.com/watch?v=RUh8D2Hau2o"
@@ -48,7 +48,7 @@ def vd():
 @pytest.fixture
 def enqueue(vd, monkeypatch: pytest.MonkeyPatch) -> Mock:
     mock = Mock()
-    monkeypatch.setattr(vd, "enqueue_entry", mock)
+    monkeypatch.setattr(owner_module(vd, "_retry_failed_downloads"), "enqueue_entry", mock)
     return mock
 
 

@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.pending_queue import save_pending_queue
-from tests._vd_loader import import_vid_module
+from tests._vd_loader import import_vid_module, owner_module
 
 
 class _FakeSignal:
@@ -274,7 +274,7 @@ def test_download_pending_now_playlist_entry_uses_enqueue_entry(
     win = _make_win(vd, path)
     win._pending_deps = lambda: "deps"
     enqueue = Mock()
-    monkeypatch.setattr(vd, "enqueue_entry", enqueue)
+    monkeypatch.setattr(owner_module(vd, "_download_pending_now"), "enqueue_entry", enqueue)
 
     win._download_pending_now([record])
 
@@ -374,7 +374,9 @@ def test_show_pending_downloads_creates_dialog_when_none_cached(tmp_path: Path) 
     save_pending_queue(path, [_pending_record()])
     win = _make_win(vd, path)
 
-    with patch.object(vd, "PendingDownloadsDialog", _FakeDialog):
+    with patch.object(
+        owner_module(vd, "_show_pending_downloads"), "PendingDownloadsDialog", _FakeDialog
+    ):
         win._show_pending_downloads()
 
     assert isinstance(win._pending_dialog, _FakeDialog)
@@ -391,7 +393,7 @@ def test_show_pending_downloads_refocuses_existing_live_dialog_without_replacing
     win._pending_dialog = existing
 
     with patch.object(
-        vd,
+        owner_module(vd, "_show_pending_downloads"),
         "PendingDownloadsDialog",
         Mock(
             side_effect=AssertionError(
@@ -421,9 +423,10 @@ def test_show_pending_downloads_recovers_when_cached_dialog_was_deleted_by_qt(
     win = _make_win(vd, path)
     win._pending_dialog = _RaisingDialog()
 
+    mod = owner_module(vd, "_show_pending_downloads")
     with (
-        patch.object(vd, "PendingDownloadsDialog", _FakeDialog),
-        patch.object(vd, "log_exception") as mock_log,
+        patch.object(mod, "PendingDownloadsDialog", _FakeDialog),
+        patch.object(mod, "log_exception") as mock_log,
     ):
         win._show_pending_downloads()
 

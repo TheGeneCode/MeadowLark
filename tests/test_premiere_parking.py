@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.pending_queue import KIND_PREMIERE, load_pending_queue
-from tests._vd_loader import import_vid_module
+from tests._vd_loader import import_vid_module, owner_module
 
 
 def _make_win(
@@ -70,7 +70,11 @@ def _make_win(
     win._queued = []
     win.downloadQueue = SimpleNamespace(put=win._queued.append)
     if failed_downloads_path is not None:
-        monkeypatch.setattr(vd, "FAILED_DOWNLOADS_FILE", failed_downloads_path)
+        monkeypatch.setattr(
+            owner_module(vd, "_on_download_failed"),
+            "FAILED_DOWNLOADS_FILE",
+            failed_downloads_path,
+        )
     return win
 
 
@@ -94,7 +98,7 @@ def test_park_not_yet_released_creates_premiere_record_with_parsed_release_at(
     path = tmp_path / "pending_queue.json"
     win = _make_win(vd, path, monkeypatch)
 
-    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+    with patch.object(owner_module(vd, "_park_not_yet_released").yt_dlp, "YoutubeDL") as mock_ydl:
         ydl_instance = mock_ydl.return_value.__enter__.return_value
         ydl_instance.extract_info.return_value = {"live_status": "is_upcoming"}
         win._park_not_yet_released(_not_yet_released_failed_record())
@@ -114,7 +118,7 @@ def test_park_not_yet_released_carries_playlist_id(
     win = _make_win(vd, path, monkeypatch)
     playlist_id = "PL" + "a" * 32
 
-    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+    with patch.object(owner_module(vd, "_park_not_yet_released").yt_dlp, "YoutubeDL") as mock_ydl:
         ydl_instance = mock_ydl.return_value.__enter__.return_value
         ydl_instance.extract_info.return_value = {"live_status": "is_upcoming"}
         win._park_not_yet_released(
@@ -153,7 +157,7 @@ def test_park_not_yet_released_called_twice_for_same_url_does_not_duplicate(
     path = tmp_path / "pending_queue.json"
     win = _make_win(vd, path, monkeypatch)
 
-    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+    with patch.object(owner_module(vd, "_park_not_yet_released").yt_dlp, "YoutubeDL") as mock_ydl:
         ydl_instance = mock_ydl.return_value.__enter__.return_value
         ydl_instance.extract_info.return_value = {"live_status": "is_upcoming"}
         record = _not_yet_released_failed_record()
@@ -178,7 +182,7 @@ def test_park_not_yet_released_immediately_enqueues_when_already_available(
     path = tmp_path / "pending_queue.json"
     win = _make_win(vd, path, monkeypatch)
 
-    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+    with patch.object(owner_module(vd, "_park_not_yet_released").yt_dlp, "YoutubeDL") as mock_ydl:
         ydl_instance = mock_ydl.return_value.__enter__.return_value
         ydl_instance.extract_info.return_value = {"live_status": "was_live"}
         win._park_not_yet_released(_not_yet_released_failed_record())
@@ -196,7 +200,11 @@ def test_park_not_yet_released_upsert_oserror_does_not_crash_and_skips_check(
     win = _make_win(vd, path, monkeypatch)
     win.check_pending_queue = Mock()
 
-    with patch.object(vd, "upsert_pending", side_effect=OSError("disk full")):
+    with patch.object(
+        owner_module(vd, "_park_not_yet_released"),
+        "upsert_pending",
+        side_effect=OSError("disk full"),
+    ):
         win._park_not_yet_released(_not_yet_released_failed_record())
 
     assert win.logs == []
@@ -212,7 +220,7 @@ def test_on_download_failed_dispatches_not_yet_released_to_park_not_failed_store
     failed_path = tmp_path / "failed_downloads.json"
     win = _make_win(vd, pending_path, monkeypatch, failed_downloads_path=failed_path)
 
-    with patch.object(vd.yt_dlp, "YoutubeDL") as mock_ydl:
+    with patch.object(owner_module(vd, "_on_download_failed").yt_dlp, "YoutubeDL") as mock_ydl:
         ydl_instance = mock_ydl.return_value.__enter__.return_value
         ydl_instance.extract_info.return_value = {"live_status": "is_upcoming"}
         win._on_download_failed(_not_yet_released_failed_record())
@@ -252,7 +260,7 @@ def test_window_pending_deps_ydl_class_is_explicitly_wired_not_frozen_default(
     win = _make_win(vd, tmp_path / "pending_queue.json", monkeypatch)
 
     sentinel_class = type("SentinelYDL", (), {})
-    with patch.object(vd.yt_dlp, "YoutubeDL", sentinel_class):
+    with patch.object(owner_module(vd, "_pending_deps").yt_dlp, "YoutubeDL", sentinel_class):
         deps = win._pending_deps()
 
     assert deps.ydl_class is sentinel_class

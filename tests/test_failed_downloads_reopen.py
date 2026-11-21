@@ -44,15 +44,15 @@ def test_dead_cached_dialog_falls_through_to_a_new_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If the cached C++ object is gone, a fresh dialog replaces it."""
-    import meadowlark
-
     dialog = MagicMock()
     dialog.show.side_effect = RuntimeError("wrapped C/C++ object has been deleted")
     win = _make_window(dialog)
 
     replacement = MagicMock()
-    monkeypatch.setattr(meadowlark, "FailedDownloadsDialog", lambda *_args, **_kwargs: replacement)
-    monkeypatch.setattr(meadowlark, "load_failed_downloads", lambda _path: [])
+    monkeypatch.setattr(
+        "src.window_download_lists.FailedDownloadsDialog", lambda *_args, **_kwargs: replacement
+    )
+    monkeypatch.setattr("src.window_download_lists.load_failed_downloads", lambda _path: [])
 
     win._show_failed_downloads()
 
@@ -71,13 +71,10 @@ def test_new_dialog_signals_wire_to_the_matching_handler(
     _retry_failed_downloads) would still type-check and would only surface as
     the wrong action running in production.
     """
-    import meadowlark
-
     win = _make_window(None)
-    monkeypatch.setattr(meadowlark, "load_failed_downloads", lambda _path: [])
+    monkeypatch.setattr("src.window_download_lists.load_failed_downloads", lambda _path: [])
     monkeypatch.setattr(
-        meadowlark,
-        "FailedDownloadsDialog",
+        "src.window_download_lists.FailedDownloadsDialog",
         lambda records, *_args, **_kwargs: FailedDownloadsDialog(records),
     )
     # _show_failed_downloads calls the real .show(), which would otherwise open a
