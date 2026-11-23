@@ -11,7 +11,17 @@ from .ydl_options import build_shared_extraction_opts
 YdlFactory: TypeAlias = Callable[..., AbstractContextManager[Any]]
 """Called like ``yt_dlp.YoutubeDL(opts)``; the context value must offer ``extract_info``."""
 
-_QUIET_YDL_OPTS: dict[str, bool] = {"quiet": True, "no_warnings": True}
+_METADATA_PROBE_OPTS: dict[str, bool] = {
+    "quiet": True,
+    "no_warnings": True,
+    # Every helper here is metadata-only, yet yt-dlp still runs format selection
+    # on fully-processed entries and raises "Requested format is not available"
+    # when nothing is downloadable. YouTube's rolling SABR gating (#12482) strips
+    # every URL-bearing format for a video for hours at a time, which would turn a
+    # transient download-side condition into a failed title/date/duration lookup.
+    # Downloads build their own options and still enforce formats.
+    "ignore_no_formats_error": True,
+}
 
 
 def _resolve_factory(ydl_class: YdlFactory | None) -> YdlFactory:
@@ -45,7 +55,7 @@ def extract_playlist_info(
     Returns:
         Dictionary containing extracted info.
     """
-    opts: dict = {**build_shared_extraction_opts(), **_QUIET_YDL_OPTS}
+    opts: dict = {**build_shared_extraction_opts(), **_METADATA_PROBE_OPTS}
     if extra_opts:
         opts.update(extra_opts)
     if playlistend:
@@ -78,7 +88,7 @@ def extract_video_entries(
     """
     opts = {
         **build_shared_extraction_opts(),
-        **_QUIET_YDL_OPTS,
+        **_METADATA_PROBE_OPTS,
         "extract_flat": extract_flat,
     }
     if cookiefile:
@@ -99,9 +109,10 @@ def extract_release_info(
     An upcoming premiere has no formats, so a normal extraction dies inside
     ``raise_no_formats`` ("Premieres in 6 hours") before any info_dict is built --
     which is exactly why such items reach the failed-downloads store today.
-    ``ignore_no_formats_error`` downgrades that to a warning so the info_dict comes
-    back carrying ``live_status`` and ``release_timestamp``. ``noplaylist`` keeps a
-    watch URL that also names a list from expanding into the whole playlist.
+    ``ignore_no_formats_error`` (in the shared metadata baseline) downgrades that
+    to a warning so the info_dict comes back carrying ``live_status`` and
+    ``release_timestamp``. ``noplaylist`` keeps a watch URL that also names a list
+    from expanding into the whole playlist.
 
     Args:
         url: The video URL to probe.
@@ -113,9 +124,8 @@ def extract_release_info(
     """
     opts: dict = {
         **build_shared_extraction_opts(),
-        **_QUIET_YDL_OPTS,
+        **_METADATA_PROBE_OPTS,
         "skip_download": True,
-        "ignore_no_formats_error": True,
         "noplaylist": True,
     }
     if cookiefile:

@@ -2,10 +2,8 @@
 
 from typing import Any
 
-import yt_dlp
-
 from src.exceptions import PodcastResolutionError
-from src.ydl_options import build_shared_extraction_opts
+from src.ydl_utils import extract_playlist_info
 
 MAX_LOOKAHEAD = 5
 """Max number of lookahead iterations when searching for accessible podcast entries."""
@@ -59,15 +57,7 @@ def fetch_latest_accessible_entry(
     # try progressively larger tail slices rather than full scrape
     for n in range(1, MAX_LOOKAHEAD + 1):
         try:
-            with yt_dlp.YoutubeDL(
-                {
-                    **build_shared_extraction_opts(),
-                    "quiet": True,
-                    "no_warnings": True,
-                    "playlist_items": str(n),
-                },
-            ) as ydl:
-                info = ydl.extract_info(url, download=False)
+            info = extract_playlist_info(url, extra_opts={"playlist_items": str(n)})
         except Exception as exc:
             original_exc = exc
             if "Private video" in str(exc):

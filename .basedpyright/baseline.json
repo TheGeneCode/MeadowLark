@@ -372,32 +372,6 @@
                 }
             }
         ],
-        "./src/podcast_helpers.py": [
-            {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 16,
-                    "endColumn": 17,
-                    "lineCount": 6
-                }
-            },
-            {
-                "code": "reportIndexIssue",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 22,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportReturnType",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 68,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./src/settings_dialog.py": [
             {
                 "code": "reportOptionalMemberAccess",

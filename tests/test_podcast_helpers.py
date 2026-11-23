@@ -1,5 +1,6 @@
 """Unit tests for podcast_helpers module."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,7 +29,7 @@ class TestMaxLookahead:
 class TestFetchLatestAccessibleEntry:
     """Tests for fetch_latest_accessible_entry function."""
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_extraction_carries_pot_provider_wiring(self, mock_ydl_class: MagicMock) -> None:
         """
         Metadata extraction must carry the shared PO-token provider wiring.
@@ -59,7 +60,103 @@ class TestFetchLatestAccessibleEntry:
         # per-call options must survive the merge
         assert opts["playlist_items"] == "1"
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    def test_latest_entry_resolves_when_every_format_is_gated(self) -> None:
+        """
+        A metadata probe must not depend on the video being downloadable right now.
+
+        YouTube's rolling SABR gating can strip every URL-bearing format, leaving
+        only storyboards. Real yt-dlp format selection then raises "Requested
+        format is not available" unless the probe opts out, which marked whole
+        podcasts as errored even though title/date/duration were all present.
+        """
+        import yt_dlp
+
+        storyboard_only = {
+            "_type": "video",
+            "id": "gated123",
+            "title": "Gated episode",
+            "upload_date": "20261123",
+            "duration": 3600,
+            "extractor": "youtube",
+            "extractor_key": "Youtube",
+            "webpage_url": "https://www.youtube.com/watch?v=gated123",
+            "formats": [
+                {
+                    "format_id": "sb0",
+                    "url": "https://i.ytimg.com/sb/gated123/storyboard3_L0/default.jpg",
+                    "ext": "mhtml",
+                    "protocol": "mhtml",
+                    "vcodec": "none",
+                    "acodec": "none",
+                    "format_note": "storyboard",
+                },
+            ],
+        }
+        # Any: yt-dlp types ie_result as its private _InfoDict TypedDict.
+        playlist: Any = {
+            "_type": "playlist",
+            "id": "pl",
+            "title": "Show",
+            "extractor": "youtube:tab",
+            "extractor_key": "YoutubeTab",
+            "webpage_url": "https://www.youtube.com/playlist?list=pl",
+            "entries": [storyboard_only],
+        }
+
+        def _process_only(ydl: yt_dlp.YoutubeDL, _url: str, *, download: bool = True) -> Any:
+            result: Any = dict(playlist)
+            return ydl.process_ie_result(result, download=download)
+
+        with patch.object(yt_dlp.YoutubeDL, "extract_info", _process_only):
+            entries, skipped, _info = fetch_latest_accessible_entry("http://test.url")
+
+        assert [e["id"] for e in entries] == ["gated123"]
+        assert entries[0]["duration"] == 3600
+        assert skipped is False
+
+    def test_private_lookahead_still_works_with_format_less_entries(self) -> None:
+        """
+        Suppressing no-formats errors must not break private-video lookahead.
+
+        Real yt-dlp slices by ``playlist_items``: n=1 yields a format-less
+        "Private video" stub (skipped on title), n=2 yields an entry whose
+        ``formats`` list is empty (the raise_no_formats path, not format
+        selection) which must still resolve with ``skipped`` True.
+        """
+        import yt_dlp
+
+        def _video(vid: str, title: str) -> dict[str, Any]:
+            return {
+                "_type": "video",
+                "id": vid,
+                "title": title,
+                "extractor": "youtube",
+                "extractor_key": "Youtube",
+                "webpage_url": f"https://www.youtube.com/watch?v={vid}",
+                "formats": [],
+            }
+
+        playlist: Any = {
+            "_type": "playlist",
+            "id": "pl",
+            "title": "Show",
+            "extractor": "youtube:tab",
+            "extractor_key": "YoutubeTab",
+            "webpage_url": "https://www.youtube.com/playlist?list=pl",
+            "entries": [_video("priv1", "Private video"), _video("ok2", "Episode 2")],
+        }
+
+        def _process_only(ydl: yt_dlp.YoutubeDL, _url: str, *, download: bool = True) -> Any:
+            result: Any = {**playlist, "entries": list(playlist["entries"])}
+            return ydl.process_ie_result(result, download=download)
+
+        with patch.object(yt_dlp.YoutubeDL, "extract_info", _process_only):
+            entries, skipped, _info = fetch_latest_accessible_entry("http://test.url")
+
+        assert [e["id"] for e in entries] == ["ok2"]
+        assert skipped is True
+
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_pot_provider_wiring_carried_on_every_lookahead_retry(
         self, mock_ydl_class: MagicMock
     ) -> None:
@@ -93,7 +190,7 @@ class TestFetchLatestAccessibleEntry:
         assert mock_ydl_class.call_args_list[0].args[0]["playlist_items"] == "1"
         assert mock_ydl_class.call_args_list[1].args[0]["playlist_items"] == "2"
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_single_iteration_success(self, mock_ydl_class: MagicMock) -> None:
         """Test successful fetch on first iteration (n=1)."""
         # Setup mock
@@ -114,7 +211,7 @@ class TestFetchLatestAccessibleEntry:
         assert skipped is False
         assert info["id"] == "playlist123"
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_skips_private_on_title(self, mock_ydl_class: MagicMock) -> None:
         """Test private video detected by title, retry succeeds."""
         # Setup: first call returns private video
@@ -146,7 +243,7 @@ class TestFetchLatestAccessibleEntry:
         assert entries[0]["id"] == "vid_new"
         assert skipped is True  # Private video was skipped
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_retries_on_private_video_exception(
         self,
         mock_ydl_class: MagicMock,
@@ -173,7 +270,7 @@ class TestFetchLatestAccessibleEntry:
         assert entries[0]["id"] == "vid456"
         assert skipped is True
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_raises_non_private_error_immediately(
         self,
         mock_ydl_class: MagicMock,
@@ -189,7 +286,7 @@ class TestFetchLatestAccessibleEntry:
         with pytest.raises(DownloadError, match="URL not found"):
             fetch_latest_accessible_entry("http://invalid.url")
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_exhausts_lookahead_raises_podcast_resolution(
         self,
         mock_ydl_class: MagicMock,
@@ -207,7 +304,7 @@ class TestFetchLatestAccessibleEntry:
         with pytest.raises(PodcastResolutionError):
             fetch_latest_accessible_entry("http://all.private.url")
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_empty_playlist_raises_error(self, mock_ydl_class: MagicMock) -> None:
         """Test that empty playlist raises PodcastResolutionError."""
         mock_ydl_instance = MagicMock()
@@ -223,7 +320,7 @@ class TestFetchLatestAccessibleEntry:
         with pytest.raises(PodcastResolutionError):
             fetch_latest_accessible_entry("http://empty.url")
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_oserror_raised_immediately(self, mock_ydl_class: MagicMock) -> None:
         """Test that OSError is raised immediately without retry."""
         mock_ydl_instance = MagicMock()
@@ -236,7 +333,7 @@ class TestFetchLatestAccessibleEntry:
         with pytest.raises(OSError, match="Network timeout"):
             fetch_latest_accessible_entry("http://test.url")
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_valueerror_raised_immediately(self, mock_ydl_class: MagicMock) -> None:
         """Test that ValueError is raised immediately without retry."""
         mock_ydl_instance = MagicMock()
@@ -249,7 +346,7 @@ class TestFetchLatestAccessibleEntry:
         with pytest.raises(ValueError, match="Invalid URL format"):
             fetch_latest_accessible_entry("http://test.url")
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_multiple_retries_on_private_videos(
         self,
         mock_ydl_class: MagicMock,
@@ -278,7 +375,7 @@ class TestFetchLatestAccessibleEntry:
         assert skipped is True
         assert mock_ydl_instance.extract_info.call_count == EXPECTED_CALL_COUNT
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_info_dict_returned_correctly(self, mock_ydl_class: MagicMock) -> None:
         """Test that the full info dict is returned for playlist metadata."""
         mock_ydl_instance = MagicMock()
@@ -300,7 +397,7 @@ class TestFetchLatestAccessibleEntry:
         assert info == expected_info
         assert info["title"] == "My Podcast"
 
-    @patch("src.podcast_helpers.yt_dlp.YoutubeDL")
+    @patch("src.ydl_utils.yt_dlp.YoutubeDL")
     def test_returns_list_of_entries(self, mock_ydl_class: MagicMock) -> None:
         """Test that entries are returned as a list."""
         mock_ydl_instance = MagicMock()

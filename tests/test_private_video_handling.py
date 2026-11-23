@@ -131,7 +131,7 @@ def test_fetch_latest_accessible_entry_skips_private(monkeypatch):
                 ],
             }
 
-    monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL)
+    monkeypatch.setattr("src.ydl_utils.yt_dlp.YoutubeDL", DummyYDL)
     entries, skipped, info = fetch_latest_accessible_entry("http://fake-playlist")
     assert skipped is True
     assert isinstance(entries, list) and len(entries) == 1
@@ -169,7 +169,7 @@ def test_fetch_latest_accessible_entry_two_private_then_good(monkeypatch):
                 "title": "Playlist",
             }
 
-    monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL2)
+    monkeypatch.setattr("src.ydl_utils.yt_dlp.YoutubeDL", DummyYDL2)
     entries, skipped, info = fetch_latest_accessible_entry("http://fake3")
     assert skipped is True
     assert entries[0]["webpage_url"] == "http://example.com/good3"
@@ -201,7 +201,7 @@ def test_fetch_latest_accessible_entry_private_by_title(monkeypatch):
                 ],
             }
 
-    monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL)
+    monkeypatch.setattr("src.ydl_utils.yt_dlp.YoutubeDL", DummyYDL)
     entries, skipped, info = fetch_latest_accessible_entry("http://fake2")
     assert skipped is True
     assert entries[0]["webpage_url"] == "http://example.com/other"
@@ -235,7 +235,7 @@ def test_filter_audio_playlist_urls_with_private(monkeypatch):
                 ],
             }
 
-    monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL)
+    monkeypatch.setattr("src.ydl_utils.yt_dlp.YoutubeDL", DummyYDL)
 
     # use dummy window-like object
     class DummyWin:
@@ -283,7 +283,7 @@ def test_fetch_latest_accessible_entry_no_accessible(monkeypatch):
                 "entries": [{"title": "Private video 1"}, {"title": "Private video 2"}],
             }
 
-    monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL2)
+    monkeypatch.setattr("src.ydl_utils.yt_dlp.YoutubeDL", DummyYDL2)
     with pytest.raises(PodcastResolutionError):
         fetch_latest_accessible_entry("http://nothing")
     # should have retried up to the lookup limit
@@ -319,7 +319,7 @@ def test_filter_audio_playlist_urls_skips_update(monkeypatch, tmp_path):
                 ],
             }
 
-    monkeypatch.setattr("src.podcast_helpers.yt_dlp.YoutubeDL", DummyYDL)
+    monkeypatch.setattr("src.ydl_utils.yt_dlp.YoutubeDL", DummyYDL)
 
     class DummyWin:
         def _check_sponsorblock_for_video_id(self, vid):

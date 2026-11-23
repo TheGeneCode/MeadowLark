@@ -102,6 +102,7 @@ def test_extract_playlist_info_extra_opts_none_leaves_baseline_intact() -> None:
     assert set(captured[0].keys()) == {
         "quiet",
         "no_warnings",
+        "ignore_no_formats_error",
         "js_runtimes",
         "extractor_args",
     }
@@ -139,13 +140,14 @@ def test_extract_playlist_info_extra_opts_empty_dict_does_not_merge() -> None:
     assert set(captured[0].keys()) == {
         "quiet",
         "no_warnings",
+        "ignore_no_formats_error",
         "js_runtimes",
         "extractor_args",
     }
 
 
 def test_extract_playlist_info_extra_opts_overrides_quiet_baseline() -> None:
-    """extra_opts applied after baseline — a conflicting key wins over _QUIET_YDL_OPTS."""
+    """extra_opts applied after baseline — a conflicting key wins over _METADATA_PROBE_OPTS."""
     captured: list[dict] = []
     factory = _make_ydl_factory({}, captured_opts=captured)
     extract_playlist_info(
