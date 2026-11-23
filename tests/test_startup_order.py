@@ -67,3 +67,37 @@ def test_nothing_blocks_the_gui_thread_between_main_window_show_and_event_loop()
         "Synchronous work between window.show() and app.exec() starves Explorer's "
         f"taskbar-icon query; move it before window.show(): {offenders}"
     )
+
+
+def _is_sys_exit(stmt: ast.stmt) -> bool:
+    return _is_method_call(stmt, "sys", "exit") or (
+        isinstance(stmt, ast.Raise)
+        and isinstance(stmt.exc, (ast.Name, ast.Call))
+        and "SystemExit" in ast.unparse(stmt.exc)
+    )
+
+
+def test_first_run_restart_exits_the_original_instance() -> None:
+    """
+    The wizard-accepted branch spawns a restart and must then really exit.
+
+    ``app.quit()`` before ``app.exec()`` is ignored by Qt, so falling through to
+    ``app.exec()`` leaves two instances on the same queue and ``.env`` (backlog #27).
+    """
+    gates = [s for s in _main_block() if _is_first_run_gate(s)]
+    assert len(gates) == 1, "expected exactly one top-level `if needs_first_run():` in __main__"
+    accepted = [
+        s
+        for s in ast.walk(gates[0])
+        if isinstance(s, ast.If) and "Accepted" in ast.unparse(s.test)
+    ]
+    assert len(accepted) == 1, "expected one wizard-Accepted branch inside the first-run gate"
+    branch = accepted[0].body
+    spawns = [i for i, s in enumerate(branch) if _is_method_call(s, "QProcess", "startDetached")]
+    assert spawns, "wizard-Accepted branch no longer spawns the restart"
+    assert _is_sys_exit(branch[-1]), (
+        "wizard-Accepted branch must end in sys.exit(): app.quit() before app.exec() "
+        f"is a no-op, so the original instance keeps running. Last stmt: {ast.unparse(branch[-1])}"
+    )
+    tail = [ast.unparse(s) for s in branch[spawns[-1] + 1 : -1]]
+    assert all("quit" not in t for t in tail), f"dead app.quit() after restart spawn: {tail}"

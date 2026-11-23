@@ -720,7 +720,10 @@ if __name__ == "__main__":
         if _wizard.exec() == QDialog.DialogCode.Accepted:
             _restart_args = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv
             QProcess.startDetached(sys.executable, _restart_args)
-            app.quit()
+            # app.quit() is a no-op before app.exec() starts its loop, so exit for real:
+            # otherwise this instance keeps running beside the restart, with stale config.
+            window.close()
+            sys.exit(0)
 
     app.exec()
 
