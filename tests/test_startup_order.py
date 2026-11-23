@@ -87,9 +87,7 @@ def test_first_run_restart_exits_the_original_instance() -> None:
     gates = [s for s in _main_block() if _is_first_run_gate(s)]
     assert len(gates) == 1, "expected exactly one top-level `if needs_first_run():` in __main__"
     accepted = [
-        s
-        for s in ast.walk(gates[0])
-        if isinstance(s, ast.If) and "Accepted" in ast.unparse(s.test)
+        s for s in ast.walk(gates[0]) if isinstance(s, ast.If) and "Accepted" in ast.unparse(s.test)
     ]
     assert len(accepted) == 1, "expected one wizard-Accepted branch inside the first-run gate"
     branch = accepted[0].body
