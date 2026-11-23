@@ -265,6 +265,24 @@ def _license_files_in(directory: Path, pattern: re.Pattern[str]) -> tuple[Path, 
     )
 
 
+def _root_store_key(npm_root: Path) -> str | None:
+    """
+    Return the store key of the project that owns ``npm_root`` (its sibling ``package.json``).
+
+    Deno >= 2.9 creates an empty ``.deno/<root name>@<root version>`` entry for that project.
+    It is the vendored server itself, not a dependency, so the npm walk must not treat it
+    as an installed package; the server's license is covered by ``_OVERRIDES``.
+    """
+    manifest_path = npm_root.parent / "package.json"
+    if not manifest_path.is_file():
+        return None
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    name, version = manifest.get("name"), manifest.get("version")
+    if not (isinstance(name, str) and isinstance(version, str)):
+        return None
+    return f"{name.replace('/', '+', 1)}@{version}"
+
+
 def npm_components(npm_root: Path) -> list[Component]:
     """
     Describe every package in the Deno npm store ``npm_root/.deno``.
@@ -272,10 +290,14 @@ def npm_components(npm_root: Path) -> list[Component]:
     Store keys are ``<name>@<version>`` with a scope's ``/`` written as ``+``. Entries that
     are not package keys are skipped; a skipped directory other than the store's own
     ``node_modules`` is reported on stderr, since it may be a package this parser missed.
+    The owning project's own entry (see ``_root_store_key``) is skipped silently.
     """
     store = npm_root / ".deno"
+    root_key = _root_store_key(npm_root)
     components: dict[tuple[str, str], Component] = {}
     for key_dir in sorted(store.iterdir()):
+        if key_dir.name == root_key:
+            continue
         match = _DENO_KEY.match(key_dir.name)
         if match is None or not key_dir.is_dir():
             if key_dir.is_dir() and key_dir.name != "node_modules":

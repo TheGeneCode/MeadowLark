@@ -316,6 +316,60 @@ def test_npm_legacy_license_shapes(tmp_path: Path, collector: types.ModuleType) 
     assert licenses == {"old-a": "MIT", "old-b": "MIT OR Apache-2.0"}
 
 
+def test_npm_store_excludes_the_root_project_itself(
+    tmp_path: Path, collector: types.ModuleType
+) -> None:
+    # Deno >= 2.9 materialises an empty ``.deno/<root name>@<root version>`` entry for the
+    # project whose package.json sits beside node_modules; it is not a dependency.
+    (tmp_path / "package.json").write_text(
+        json.dumps({"name": "the-server", "version": "2.0.2"}), encoding="utf-8"
+    )
+    npm_root = tmp_path / "node_modules"
+    (npm_root / ".deno" / "the-server@2.0.2").mkdir(parents=True)
+    _write_npm_package(npm_root, "dep@1.0.0", "dep", {"license": "MIT"}, license_text=None)
+    assert [(c.name, c.version) for c in collector.npm_components(npm_root)] == [("dep", "1.0.0")]
+
+
+def test_npm_store_excludes_scoped_root_project(
+    tmp_path: Path, collector: types.ModuleType
+) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"name": "@scope/the-server", "version": "2.0.2"}), encoding="utf-8"
+    )
+    npm_root = tmp_path / "node_modules"
+    (npm_root / ".deno" / "@scope+the-server@2.0.2").mkdir(parents=True)
+    _write_npm_package(npm_root, "dep@1.0.0", "dep", {"license": "MIT"}, license_text=None)
+    assert [(c.name, c.version) for c in collector.npm_components(npm_root)] == [("dep", "1.0.0")]
+
+
+@pytest.mark.parametrize(
+    "root_manifest",
+    [None, {"version": "2.0.2"}, {"name": "the-server"}, {"name": "the-server", "version": 2}],
+    ids=["absent", "no-name", "no-version", "non-string-version"],
+)
+def test_npm_unusable_root_manifest_skips_nothing(
+    tmp_path: Path, collector: types.ModuleType, root_manifest: dict[str, object] | None
+) -> None:
+    if root_manifest is not None:
+        (tmp_path / "package.json").write_text(json.dumps(root_manifest), encoding="utf-8")
+    npm_root = tmp_path / "node_modules"
+    (npm_root / ".deno" / "the-server@2.0.2" / "node_modules" / "the-server").mkdir(parents=True)
+    with pytest.raises(FileNotFoundError, match=r"package\.json"):
+        collector.npm_components(npm_root)
+
+
+def test_npm_root_name_at_other_version_is_still_a_dependency(
+    tmp_path: Path, collector: types.ModuleType
+) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"name": "the-server", "version": "2.0.2"}), encoding="utf-8"
+    )
+    npm_root = tmp_path / "node_modules"
+    (npm_root / ".deno" / "the-server@1.0.0" / "node_modules" / "the-server").mkdir(parents=True)
+    with pytest.raises(FileNotFoundError, match=r"package\.json"):
+        collector.npm_components(npm_root)
+
+
 def test_npm_missing_package_json_raises(tmp_path: Path, collector: types.ModuleType) -> None:
     (tmp_path / ".deno" / "ghost@1.0.0" / "node_modules" / "ghost").mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match=r"package\.json"):
