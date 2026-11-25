@@ -16,6 +16,7 @@ from .config import (
 )
 from .dict_utils import DEFAULT_POSTPROCESSORS
 from .path_utils import slugify_if_too_long
+from .pot_provider import install_probe_timeout_guard
 from .qt_protocols import YdlLogger, YdlProgressHook
 from .resolutions import RESOLUTION_PRESETS, playlist_source_key
 from .settings_dialog import get_setting, get_str_setting
@@ -60,10 +61,15 @@ def build_shared_extraction_opts() -> dict[str, Any]:
     npm deps over the network and surfacing subprocess.TimeoutExpired to the
     caller. See POT_PROVIDER_SERVER_HOME in config.
 
+    Also installs the probe-timeout guard: every YoutubeDL is built from these
+    options, so this is the one choke point that runs before any provider binds
+    its probe.
+
     Returns:
         Dictionary with the JS-runtime and extractor-arg wiring shared by
         all YoutubeDL constructions.
     """
+    install_probe_timeout_guard()
     return {
         "js_runtimes": JS_RUNTIMES_CONFIG,
         # Force an explicit client priority so YouTube's per-client 403 gating

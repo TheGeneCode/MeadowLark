@@ -4,10 +4,18 @@ import logging
 import threading
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from genekit.logging import configure_logging
 
-from src.config import ERROR_LOG_PATH, YTDLP_DEBUG_LOG_PATH, YTDLP_VERBOSE
+from src.config import (
+    ERROR_LOG_PATH,
+    LOGFILE_MIGRATION_ENABLED,
+    YTDLP_DEBUG_LOG_PATH,
+    YTDLP_VERBOSE,
+)
+
+_LEGACY_LOGFILE = Path("logfile.txt")
 
 logger = logging.getLogger(__name__)
 
@@ -44,22 +52,43 @@ def get_local_timestamp() -> str:
     return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def init_app_logging() -> None:
+    """
+    Route the root logger to ``ERROR_LOG_PATH``; call once, from the app entrypoint.
+
+    Only the entrypoint configures logging. Library modules just log, so importing
+    them (from tests or CLI tools) never opens the user's real error log.
+
+    Also moves a pre-rename ``logfile.txt`` to ``ERROR_LOG_PATH`` when
+    ``LOGFILE_MIGRATION_ENABLED`` and no error log exists yet. A failed move is
+    logged, never raised.
+    """
+    # Migrate before attaching the handler: opening it creates ERROR_LOG_PATH, which
+    # would make "no error log yet" always false. Log a failure only once attached.
+    migration_error: OSError | None = None
+    if LOGFILE_MIGRATION_ENABLED:
+        try:
+            if _LEGACY_LOGFILE.exists() and not ERROR_LOG_PATH.exists():
+                _LEGACY_LOGFILE.replace(ERROR_LOG_PATH)
+        except OSError as exc:
+            migration_error = exc
+    configure_logging("ERROR", log_file=ERROR_LOG_PATH, console="none")
+    if migration_error is not None:
+        log_exception(migration_error, "Failed to migrate logfile.txt to error_log.txt")
+
+
 def log_exception(exc: Exception, context: str | None = None) -> None:
     """
-    Log an exception to the global logger configured to write to error_log.txt.
+    Log an exception, with its full traceback, through the root logger.
 
-    This helper is used by the app to ensure all swallowed exceptions are
-    recorded with a full traceback.
-
-    If logging has not yet been configured elsewhere, configure it via
-    ``genekit.logging`` so that errors are still written to the expected file.
+    Used wherever the app swallows an exception so it is still recorded. Where it
+    lands is the entrypoint's choice: ``error_log.txt`` once :func:`init_app_logging`
+    ran (the app), otherwise logging's stderr fallback (CLI tools) or pytest's capture.
 
     Args:
         exc: The exception to log.
         context: Optional context string to prepend to the exception message.
     """
-    if not logging.getLogger().hasHandlers():
-        configure_logging("ERROR", log_file=ERROR_LOG_PATH, console="none")
     msg = f"{context}: {exc}" if context else str(exc)
     # Explicit exc_info: exception() reads sys.exc_info(), which is empty when a
     # caller passes an exception it caught earlier and is no longer handling.

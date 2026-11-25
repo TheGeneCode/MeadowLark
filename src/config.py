@@ -12,6 +12,7 @@ from typing import Final
 # Import yt-dlp exceptions for consistent error handling
 from yt_dlp.utils import DownloadError, ExtractorError, MaxDownloadsReached
 
+from .app_env import load_app_env
 from .resolutions import (
     button_label_key,
     drop_label_key,
@@ -19,6 +20,9 @@ from .resolutions import (
     parse_enabled_heights,
     playlist_file_key,
 )
+
+# Every constant below reads os.environ once, at import; .env must be loaded first.
+load_app_env()
 
 # Exception tuples for consistent error handling across the application.
 # SubprocessError covers the helper processes yt-dlp shells out to mid-extraction

@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .app_env import APPDATA_DIR, USER_ENV_PATH
 from .config import (
     ALWAYS_ON_TOP,
     APP_UPDATE_AUTO_CHECK,
@@ -152,11 +153,11 @@ for _preset in RESOLUTION_PRESETS:
     )
 
 # ============================================================================
-# AppData path (mirrors src/qyt.py and first_run_wizard.py)
+# AppData paths (module aliases so tests can patch them per-module)
 # ============================================================================
 
-_APPDATA_DIR: Path = Path.home() / "AppData" / "Roaming" / "MeadowLark"
-_USER_ENV: Path = _APPDATA_DIR / ".env"
+_APPDATA_DIR: Path = APPDATA_DIR
+_USER_ENV: Path = USER_ENV_PATH
 _PLAYLISTS_APPDATA_DIR: Path = _APPDATA_DIR / "playlists"
 
 # ============================================================================

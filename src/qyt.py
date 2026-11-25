@@ -8,48 +8,25 @@ managing and executing download tasks in a background thread with wake lock supp
 import logging
 import re
 from collections.abc import Callable
-from pathlib import Path
 from queue import Queue
 
-from dotenv import load_dotenv
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from wakepy import keep
 
-_user_env = Path.home() / "AppData" / "Roaming" / "MeadowLark" / ".env"
-load_dotenv(dotenv_path=_user_env if _user_env.exists() else None)
-load_dotenv()  # also load project .env in dev (won't override vars already set)
-
-from genekit.logging import configure_logging  # noqa: E402
-
-from src.config import (  # noqa: E402
-    ERROR_LOG_PATH,
-    HISTORY_LOG_PATH,
-    LOGFILE_MIGRATION_ENABLED,
-)
-from src.download_executor import ON_URL_START_KEY, DownloadExecutor  # noqa: E402
-from src.failed_downloads import (  # noqa: E402
+from src.config import HISTORY_LOG_PATH
+from src.download_executor import ON_URL_START_KEY, DownloadExecutor
+from src.failed_downloads import (
     ErrorCapturingLogger,
     FailureHook,
     make_failed_record,
     progress_item_key,
 )
-from src.logging_utils import (  # noqa: E402
+from src.logging_utils import (
     get_local_timestamp,
     get_ytdlp_debug_logger,
     log_exception,
 )
-from src.pot_provider import deno_warmup_pending, wait_for_deno_warm  # noqa: E402
-
-configure_logging("ERROR", log_file=ERROR_LOG_PATH, console="none")
-
-# Migrate prior logfile name to the new error log if present
-if LOGFILE_MIGRATION_ENABLED:
-    try:
-        if Path("logfile.txt").exists() and not ERROR_LOG_PATH.exists():
-            Path("logfile.txt").replace(ERROR_LOG_PATH)
-    except OSError as exc:
-        # Never fail on migration, but do record the issue for later diagnosis
-        log_exception(exc, "Failed to migrate logfile.txt to error_log.txt")
+from src.pot_provider import deno_warmup_pending, wait_for_deno_warm
 
 
 class QLogger(QObject):

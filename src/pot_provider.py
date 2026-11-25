@@ -12,6 +12,7 @@ yt_dlp_plugins.extractor.getpot_bgutil_script.BgUtilScriptDenoPTP.
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import logging
 import os
@@ -21,8 +22,12 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .config import POT_PROVIDER_SERVER_HOME, VENV_SCRIPTS_DIR
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Mirror BgUtilScriptDenoPTP: script at {server_home}/src/generate_once.ts, deps
 # under {server_home}/node_modules, Deno >= 2.4.3 (_JSRT_MIN_VER, plugin 2.0.2).
@@ -375,3 +380,65 @@ def wait_for_deno_warm(timeout: float = _DENO_WARM_TIMEOUT_S) -> DenoWarmResult 
         )
         return None
     return _warm.result
+
+
+# The plugin's script probe (BgUtilScriptPTPBase._check_script_impl, plugin 2.0.2)
+# lets subprocess.TimeoutExpired escape is_available(), and yt-dlp's PO-token
+# director calls is_available() without a try -- so one probe that overruns its
+# 15s budget aborts the whole extraction, even when the first player client needs
+# no PO token. The plugin's own Deno version check already maps a timeout to
+# "unavailable"; the guard gives the script probe the same contract.
+_PROBE_METHOD = "_check_script_impl"
+PROBE_GUARD_ATTR = "_meadowlark_probe_guard"
+"""Marker set on a probe wrapped by ``install_probe_timeout_guard``."""
+
+
+def _guard_probe(probe: Callable[[Any, str], bool]) -> Callable[[Any, str], bool]:
+    @functools.wraps(probe)
+    def guarded(self: Any, script_path: str) -> bool:  # noqa: ANN401 -- plugin instance
+        try:
+            return probe(self, script_path)
+        except subprocess.TimeoutExpired as exc:
+            logger.warning(
+                "PO-token script probe overran its %.0fs budget; provider unavailable "
+                "for this extraction (clients that need a PO token may 403)",
+                exc.timeout,
+            )
+            return False
+
+    setattr(guarded, PROBE_GUARD_ATTR, True)
+    return guarded
+
+
+def install_probe_timeout_guard() -> int:
+    """
+    Make a timed-out PO-token script probe report "unavailable" instead of raising.
+
+    Patches the classes yt-dlp actually registered (not a fresh import of the plugin
+    module, which yt-dlp re-executes on plugin load), so plugins are loaded first,
+    exactly as ``YoutubeDL.__init__`` would. Idempotent and cheap after the first call;
+    must run before a YoutubeDL is constructed, since providers bind the probe at init.
+
+    Returns:
+        Number of registered providers covered; 0 when the plugin is absent or its
+        internals changed (tests/test_pot_probe_guard.py fails loudly on the latter).
+    """
+    from yt_dlp.extractor.youtube.pot._registry import (  # noqa: PLC0415
+        _pot_providers,  # pyright: ignore[reportPrivateUsage]
+    )
+    from yt_dlp.globals import all_plugins_loaded  # noqa: PLC0415
+    from yt_dlp.plugins import load_all_plugins  # noqa: PLC0415
+
+    if not all_plugins_loaded.value:
+        load_all_plugins()
+
+    covered = 0
+    for provider in _pot_providers.value.values():
+        owner = next((k for k in provider.__mro__ if _PROBE_METHOD in vars(k)), None)
+        if owner is None:
+            continue
+        probe = vars(owner)[_PROBE_METHOD]
+        if not getattr(probe, PROBE_GUARD_ATTR, False):
+            setattr(owner, _PROBE_METHOD, _guard_probe(probe))
+        covered += 1
+    return covered

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PyQt6.QtCore import QObject
 
+from src.config import HISTORY_LOG_PATH
 from src.qyt import HistoryHook, HistoryLogger, QHook, QLogger, QYTQueue, parse_history_log
 
 
@@ -92,8 +93,8 @@ class TestHistoryLogger:
     """Tests for HistoryLogger class."""
 
     def test_history_logger_path(self) -> None:
-        """Test HistoryLogger has correct file path."""
-        assert Path("history_log.txt") == HistoryLogger.HISTORY_PATH
+        """HistoryLogger writes to the configured HISTORY_LOG_PATH (default: test_config)."""
+        assert HISTORY_LOG_PATH == HistoryLogger.HISTORY_PATH
 
     def test_format_entry(self) -> None:
         """Test HistoryLogger._format_entry formatting."""

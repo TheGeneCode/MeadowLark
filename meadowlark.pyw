@@ -81,7 +81,7 @@ from src.config import (
 from src.dict_utils import merge_dicts_recursive
 from src.failed_downloads_dialog import FailedDownloadsDialog
 from src.first_run_wizard import FirstRunWizard, needs_first_run
-from src.logging_utils import log_exception
+from src.logging_utils import init_app_logging, log_exception
 from src.match_filter import build_match_filter
 from src.pending_downloads_dialog import PendingDownloadsDialog
 from src.pending_queue import (
@@ -657,6 +657,7 @@ class MyWindow(
 
 
 if __name__ == "__main__":
+    init_app_logging()  # first: anything logged before this goes to stderr, not error_log.txt
     _storage = Path(VIDEO_STORAGE_DIR)
     if _storage.exists():
         startfile(str(_storage))  # noqa: S606
@@ -728,5 +729,4 @@ if __name__ == "__main__":
     app.exec()
 
 # TODO: size control for error logs (low priority)
-# TODO: make sure tests don't leave logs in the real error log
 # TODO: playlist numbering gets tricked by Members first. It counts them even if it can't download them, so as they come off the members first list you get the same numbered playlist video multiple times.

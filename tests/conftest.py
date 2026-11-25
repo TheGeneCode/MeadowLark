@@ -2,24 +2,30 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dotenv import load_dotenv
+import pytest
 
-# Mirrors src/qyt.py: load .env before any test module imports src.config (or anything
-# that imports it) at module scope. Without this, whichever test file happens to be
-# collected first freezes config's os.getenv-backed constants (e.g. VIDEO_STORAGE_DIR)
-# to their hardcoded defaults instead of the .env overrides, since those constants are
-# computed once at first import and .env loading used to only happen incidentally,
-# whenever some test's import chain first pulled in src.qyt. That made a handful of
-# TestRuntimeDirectoryOverrides-style tests in test_format_settings.py pass or fail
-# depending on which other test files existed and in what order pytest collected them.
-_user_env = Path.home() / "AppData" / "Roaming" / "MeadowLark" / ".env"
-load_dotenv(dotenv_path=_user_env if _user_env.exists() else None)
-load_dotenv()
-
-import pytest  # noqa: E402  (imported after load_dotenv so env is set at import time)
+# Redirect the app's log files before anything imports src.config, whose paths are
+# import-time Final constants. The defaults are CWD-relative -- the repo root under
+# pytest, i.e. the developer's real error_log.txt / history_log.txt -- and the code
+# under test writes them directly (HistoryLogger, the yt-dlp debug capture), so an
+# unredirected run appends fake entries to the logs the user diagnoses real failures
+# from. Assigned (not setdefault) before src.config loads .env (src/app_env.py), which
+# never overrides, so neither the shell nor a .env can point the suite back at a real
+# log. One fixed dir, wiped per session (best effort: a concurrent run may hold files
+# open), so it stays bounded and the last run's logs can still be read after a failure.
+# Pinned by tests/test_log_isolation.py.
+_TEST_LOG_DIR = Path(tempfile.gettempdir()) / "meadowlark-pytest-logs"
+shutil.rmtree(_TEST_LOG_DIR, ignore_errors=True)
+_TEST_LOG_DIR.mkdir(exist_ok=True)
+os.environ["VID_DL_ERROR_LOG"] = str(_TEST_LOG_DIR / "error_log.txt")
+os.environ["VID_DL_HISTORY_LOG"] = str(_TEST_LOG_DIR / "history_log.txt")
+os.environ["VID_DL_YTDLP_DEBUG_LOG"] = str(_TEST_LOG_DIR / "ytdlp_debug.log")
 
 if TYPE_CHECKING:
     from collections.abc import Callable

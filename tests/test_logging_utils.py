@@ -2,6 +2,8 @@
 
 import logging
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -45,25 +47,119 @@ class TestGetLocalTimestamp:
         )
 
 
-class TestLogException:
-    """Tests for log_exception() function."""
+@contextmanager
+def _bare_root_logger() -> Iterator[None]:
+    """
+    Run with no root handlers; afterwards close any the block attached and restore.
 
-    def test_log_exception_no_root_handlers_triggers_basicconfig(
+    Entered inside the test body, not as a fixture: pytest's logging plugin attaches
+    and detaches its own root handlers per phase, so clearing during setup would
+    misfire in the call phase and restore setup-phase handlers that never get removed.
+    """
+    original_handlers = logging.root.handlers[:]
+    original_level = logging.root.level
+    logging.root.handlers.clear()
+    try:
+        yield
+    finally:
+        # Close what the block attached, or its open handle surfaces as an
+        # unraisable ResourceWarning at interpreter shutdown.
+        for handler in logging.root.handlers:
+            handler.close()
+        logging.root.handlers = original_handlers
+        logging.root.setLevel(original_level)
+
+
+class TestInitAppLogging:
+    """init_app_logging() is the one place the root error-log handler is attached."""
+
+    def test_routes_logged_exceptions_to_error_log(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         log_path = tmp_path / "error_log.txt"
         monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", log_path)
-        original_handlers = logging.root.handlers[:]
-        logging.root.handlers.clear()
-        try:
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
             log_exception(ValueError("test error"), "test context")
-        finally:
-            # Close the file handler log_exception attached, or its open handle
-            # surfaces as an unraisable ResourceWarning at interpreter shutdown.
-            for handler in logging.root.handlers:
-                handler.close()
-            logging.root.handlers = original_handlers
         assert "test context: test error" in log_path.read_text(encoding="utf-8")
+
+    def test_log_exception_without_init_never_creates_error_log(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No lazy self-configuration: an unconfigured process must not open the log."""
+        log_path = tmp_path / "error_log.txt"
+        monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", log_path)
+        with _bare_root_logger():
+            log_exception(ValueError("test error"), "test context")
+            assert not logging.root.handlers
+        assert not log_path.exists()
+
+
+class TestInitAppLoggingMigration:
+    """logfile.txt -> error_log.txt migration branches of init_app_logging()."""
+
+    @staticmethod
+    def _setup(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, enabled: bool = True
+    ) -> tuple[Path, Path]:
+        legacy = tmp_path / "logfile.txt"
+        error_log = tmp_path / "error_log.txt"
+        monkeypatch.setattr(logging_utils, "_LEGACY_LOGFILE", legacy)
+        monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", error_log)
+        monkeypatch.setattr(logging_utils, "LOGFILE_MIGRATION_ENABLED", enabled)
+        return legacy, error_log
+
+    def test_legacy_file_moved_when_no_error_log(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        legacy, error_log = self._setup(monkeypatch, tmp_path)
+        legacy.write_text("old line\n", encoding="utf-8")
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+        assert not legacy.exists()
+        assert "old line" in error_log.read_text(encoding="utf-8")
+
+    def test_legacy_file_untouched_when_flag_off(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        legacy, error_log = self._setup(monkeypatch, tmp_path, enabled=False)
+        legacy.write_text("old line\n", encoding="utf-8")
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+        assert legacy.read_text(encoding="utf-8") == "old line\n"
+        logged = error_log.read_text(encoding="utf-8") if error_log.exists() else ""
+        assert "old line" not in logged
+
+    def test_legacy_file_untouched_when_error_log_exists(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        legacy, error_log = self._setup(monkeypatch, tmp_path)
+        legacy.write_text("old line\n", encoding="utf-8")
+        error_log.write_text("current\n", encoding="utf-8")
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+        assert legacy.exists()
+        assert "old line" not in error_log.read_text(encoding="utf-8")
+
+    def test_replace_oserror_is_logged_not_raised(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        legacy, error_log = self._setup(monkeypatch, tmp_path)
+        legacy.write_text("old line\n", encoding="utf-8")
+
+        def _boom(self: Path, target: object) -> Path:
+            msg = "locked"
+            raise PermissionError(msg)
+
+        monkeypatch.setattr(Path, "replace", _boom)
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+        assert legacy.exists()
+        assert "Failed to migrate logfile.txt" in error_log.read_text(encoding="utf-8")
+
+
+class TestLogException:
+    """Tests for log_exception() function."""
 
     def test_log_exception_outside_except_block_records_passed_traceback(
         self, caplog: pytest.LogCaptureFixture

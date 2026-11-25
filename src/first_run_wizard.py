@@ -14,8 +14,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-_APPDATA_DIR = Path.home() / "AppData" / "Roaming" / "MeadowLark"
-_USER_ENV = _APPDATA_DIR / ".env"
+from src.app_env import APPDATA_DIR, USER_ENV_PATH
+
+_APPDATA_DIR = APPDATA_DIR
+_USER_ENV = USER_ENV_PATH
 
 
 def needs_first_run() -> bool:
