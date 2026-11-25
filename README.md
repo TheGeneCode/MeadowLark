@@ -288,7 +288,7 @@ Browser cookies expire eventually (usually after a few weeks to a few months). I
 MeadowLark keeps two logs in its AppData folder:
 
 - **history_log.txt** — a record of every successful download (title, URL, timestamp)
-- **error_log.txt** — errors and failures
+- **error_log.txt** — errors and failures (capped: at 1 MB it rolls over to `error_log.txt.1`, so only recent errors are kept)
 
 You can view recent history inside the app via the **History** menu item (if available in your version). The archive file (`archive.txt`) is what yt-dlp uses internally to skip already-downloaded videos; you normally don't need to touch it. There is an **Ignore Archive?** checkbox that will download a video you have previously downloaded, if you need. Be careful to uncheck it when you no longer need it, or you could accidentally download whole playlists you've already seen.
 

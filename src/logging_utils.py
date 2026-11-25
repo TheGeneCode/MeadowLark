@@ -24,6 +24,12 @@ _YTDLP_DEBUG_LOGGER_NAME = "meadowlark.ytdlp"
 # and only the most recent failure is ever of interest.
 _YTDLP_DEBUG_MAX_BYTES = 5 * 1024 * 1024
 _YTDLP_DEBUG_BACKUPS = 2
+
+# error_log.txt is append-only for the app's lifetime; cap it so stale errors from
+# months ago age out instead of burying recent ones. ~2 MB max on disk.
+_ERROR_LOG_MAX_BYTES = 1024 * 1024
+_ERROR_LOG_BACKUPS = 1
+
 # QLogger.__init__ calls get_ytdlp_debug_logger() on every download; if two
 # downloads start close enough together to run on different threads, both can
 # see debug_logger.handlers as empty before either attaches one, doubling every
@@ -72,7 +78,13 @@ def init_app_logging() -> None:
                 _LEGACY_LOGFILE.replace(ERROR_LOG_PATH)
         except OSError as exc:
             migration_error = exc
-    configure_logging("ERROR", log_file=ERROR_LOG_PATH, console="none")
+    configure_logging(
+        "ERROR",
+        log_file=ERROR_LOG_PATH,
+        console="none",
+        rotate_bytes=_ERROR_LOG_MAX_BYTES,
+        backup_count=_ERROR_LOG_BACKUPS,
+    )
     if migration_error is not None:
         log_exception(migration_error, "Failed to migrate logfile.txt to error_log.txt")
 

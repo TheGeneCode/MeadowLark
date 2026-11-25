@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
@@ -156,6 +157,55 @@ class TestInitAppLoggingMigration:
             logging_utils.init_app_logging()
         assert legacy.exists()
         assert "Failed to migrate logfile.txt" in error_log.read_text(encoding="utf-8")
+
+
+class TestInitAppLoggingRotation:
+    """init_app_logging() attaches a size-capped, single-backup root file handler."""
+
+    def test_root_handler_is_rotating_with_module_constants(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", tmp_path / "error_log.txt")
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+            handlers = [h for h in logging.root.handlers if isinstance(h, RotatingFileHandler)]
+            assert len(handlers) == 1
+            assert handlers[0].maxBytes == logging_utils._ERROR_LOG_MAX_BYTES
+            assert handlers[0].backupCount == logging_utils._ERROR_LOG_BACKUPS
+
+    def test_rollover_leaves_exactly_log_and_one_backup(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log_path = tmp_path / "error_log.txt"
+        monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", log_path)
+        monkeypatch.setattr(logging_utils, "_ERROR_LOG_MAX_BYTES", 1000)
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+            for marker in ("first", "second", "third"):
+                log_exception(ValueError(marker + "x" * 600), "ctx")
+        assert sorted(p.name for p in tmp_path.iterdir()) == [
+            "error_log.txt",
+            "error_log.txt.1",
+        ]
+        assert "third" in log_path.read_text(encoding="utf-8")
+
+    def test_migrated_legacy_content_survives_into_rotating_log(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Migration runs before the handler opens (and creates) the target file."""
+        legacy = tmp_path / "logfile.txt"
+        error_log = tmp_path / "error_log.txt"
+        legacy.write_text("old line\n", encoding="utf-8")
+        monkeypatch.setattr(logging_utils, "_LEGACY_LOGFILE", legacy)
+        monkeypatch.setattr(logging_utils, "ERROR_LOG_PATH", error_log)
+        monkeypatch.setattr(logging_utils, "LOGFILE_MIGRATION_ENABLED", True)
+        with _bare_root_logger():
+            logging_utils.init_app_logging()
+            log_exception(ValueError("new"), "ctx")
+        text = error_log.read_text(encoding="utf-8")
+        assert not legacy.exists()
+        assert text.startswith("old line")
+        assert "ctx: new" in text
 
 
 class TestLogException:
