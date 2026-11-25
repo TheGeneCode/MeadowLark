@@ -203,14 +203,24 @@ DENO_EXECUTABLE: Final[Path | None] = _deno_exe if _deno_exe.is_file() else None
 # default set instead (since we always pass a cookiefile), which currently
 # resolves to "tv_downgraded" -- a client YouTube broke for cookie-
 # authenticated requests server-side in August 2026 (yt-dlp#17389), producing
-# "The page needs to be reloaded" on every video. "web_embedded" is yt-dlp's
-# confirmed-working replacement (verified 2026-08-18: full untruncated
-# downloads, no SABR cutoff) and actually exists in the client registry.
+# "The page needs to be reloaded" on every video. "web_embedded" replaced it
+# (verified 2026-08-18: full untruncated downloads, no SABR cutoff).
+#
+# By yt-dlp 2026.11.23, web_embedded's direct-HTTPS formats are SABR-stripped
+# (only muxed 360p survives) and the rest are HLS capped at 1080p, so the
+# 1440/2160 rungs silently got 1080p. "tv_samsung" (yt-dlp's own first
+# authenticated default since 2026.10.21) serves direct HTTPS up to 2160p with
+# no GVS PO token: measured 2026-11-24 with full downloads of 12-34 min videos
+# at 1080p and a 10 min 2160p video (up to 679 MiB), every file byte-complete,
+# extraction ~5s vs ~13s and downloads 1.2-3.7x faster. web_embedded stays as
+# the fallback: its HLS format ids don't collide with tv_samsung's, and
+# yt-dlp ranks HTTPS above HLS, so it only serves when tv_samsung can't.
 # Order matters: the first client that supplies a given format id wins, so do
-# NOT append "mweb" as a fallback -- it would win rungs web_embedded could
-# have served and reintroduce the 1 MB cutoff. Override with
-# VID_DL_YT_PLAYER_CLIENT (comma-separated, in priority order).
-YOUTUBE_PLAYER_CLIENTS: Final[str] = os.getenv("VID_DL_YT_PLAYER_CLIENT", "web_embedded")
+# NOT append "mweb" as a fallback -- it would win rungs the others could have
+# served and reintroduce the 1 MB cutoff. Override with
+# VID_DL_YT_PLAYER_CLIENT (comma-separated, in priority order). Re-measure a
+# candidate order with full downloads, never --test.
+YOUTUBE_PLAYER_CLIENTS: Final[str] = os.getenv("VID_DL_YT_PLAYER_CLIENT", "tv_samsung,web_embedded")
 
 # PO Token provider (bgutil "script-deno" mode) server home. In script mode the
 # provider looks for {server_home}/src/generate_once.ts and {server_home}/

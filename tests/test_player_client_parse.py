@@ -9,7 +9,7 @@ the environment variable, because the module is already loaded.
 Coverage matrix
 ===============
 A1  two clients "web_safari,tv"            → ["web_safari", "tv"]
-    (the shipped default is "mweb,tv" — see test_ydl_player_client.py; these
+    (the shipped default lives in config.py — see test_ydl_player_client.py; these
     raw strings only exercise the comma-split, not the default)
 A2  empty string ""                        → []
 A3  whitespace-only "   "                  → []
