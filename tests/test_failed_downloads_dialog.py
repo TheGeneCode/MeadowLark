@@ -9,13 +9,16 @@ this suite does that either.
 from unittest.mock import patch
 
 import pytest
-from PyQt6.QtCore import QItemSelectionModel, QPoint
-from PyQt6.QtWidgets import QApplication, QMenu
+from PyQt6.QtCore import QItemSelectionModel, QPoint, Qt
+from PyQt6.QtGui import QKeySequence
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox
 
 from src.failed_downloads import record_video_id
 from src.failed_downloads_dialog import FailedDownloadsDialog
 
 _app = QApplication.instance() or QApplication([])
+_QUESTION = "src.failed_downloads_dialog.QMessageBox.question"
+_YT = "https://www.youtube.com/watch?v="
 
 
 def _record(
@@ -415,7 +418,8 @@ def test_select_all_delete_emits_every_key() -> None:
 
     captured: list[list[str]] = []
     dialog.delete_requested.connect(captured.append)
-    dialog._delete_btn.click()
+    with patch(_QUESTION, return_value=QMessageBox.StandardButton.Yes):
+        dialog._delete_btn.click()
 
     assert captured == [["a", "b", "c"]]
 
@@ -519,3 +523,187 @@ def test_context_menu_action_triggers_the_matching_signal() -> None:
 
     assert delete_calls == [["ctx"]]
     assert retry_calls == []
+
+
+# --- #4: multi-row Delete / Mark as Downloaded have no undo, so they confirm
+# first; a single-row action stays frictionless. ---
+
+
+def test_single_row_delete_does_not_prompt() -> None:
+    dialog = FailedDownloadsDialog([_record(key="a"), _record(key="b")])
+    dialog._table.selectRow(1)
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    with patch(_QUESTION) as question:
+        dialog._delete_btn.click()
+
+    question.assert_not_called()
+    assert captured == [["b"]]
+
+
+def test_multi_row_delete_declined_emits_nothing() -> None:
+    dialog = FailedDownloadsDialog([_record(key="a"), _record(key="b"), _record(key="c")])
+    dialog._table.selectAll()
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    with patch(_QUESTION, return_value=QMessageBox.StandardButton.No) as question:
+        dialog._delete_btn.click()
+
+    assert captured == []
+    _parent, _title, text, _buttons, default = question.call_args.args
+    assert "Delete 3 failed downloads?" in text
+    assert "cannot be undone" in text
+    # A stray Enter on the prompt must cancel, not delete.
+    assert default == QMessageBox.StandardButton.No
+
+
+def test_multi_row_mark_downloaded_confirmed_emits_and_declined_does_not() -> None:
+    records = [_record(key="a", urls=[_YT + "aaa111"]), _record(key="b", urls=[_YT + "bbb222"])]
+    dialog = FailedDownloadsDialog(records)
+    dialog._table.selectAll()
+    captured: list[list[dict]] = []
+    dialog.mark_downloaded_requested.connect(captured.append)
+
+    with patch(_QUESTION, return_value=QMessageBox.StandardButton.No):
+        dialog._mark_downloaded_btn.click()
+    assert captured == []
+
+    with patch(_QUESTION, return_value=QMessageBox.StandardButton.Yes) as question:
+        dialog._mark_downloaded_btn.click()
+    assert captured == [records]
+    assert "Mark 2 videos as downloaded?" in question.call_args.args[2]
+
+
+def test_confirm_counts_eligible_targets_not_selection() -> None:
+    # 2 rows selected but only 1 is markable: the action covers one record, so no prompt.
+    record_a = _record(key="a", urls=[_YT + "abc123"])
+    record_b = _record(key="b", urls=["https://www.twitch.tv/videos/12345"])
+    dialog = FailedDownloadsDialog([record_a, record_b])
+    dialog._table.selectAll()
+    captured: list[list[dict]] = []
+    dialog.mark_downloaded_requested.connect(captured.append)
+
+    with patch(_QUESTION) as question:
+        dialog._mark_downloaded_btn.click()
+
+    question.assert_not_called()
+    assert captured == [[record_a]]
+
+
+def test_context_menu_multi_delete_also_confirms() -> None:
+    dialog = FailedDownloadsDialog([_record(key="a"), _record(key="b")])
+    dialog._table.selectAll()
+    captured_menu: dict[str, QMenu] = {}
+    with patch.object(
+        QMenu, "exec", lambda self, *_a, **_kw: captured_menu.setdefault("menu", self)
+    ):
+        dialog._show_context_menu(QPoint(0, 0))
+    actions = {action.text(): action for action in captured_menu["menu"].actions()}
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    with patch(_QUESTION, return_value=QMessageBox.StandardButton.No) as question:
+        actions["Delete (2)"].trigger()
+
+    question.assert_called_once()
+    assert captured == []
+
+
+# --- #5: the Delete key on the table routes through the same confirmed slot.
+# Real key presses need an active top-level window, which Windows' foreground
+# lock refuses while another app (the IDE) has focus - so these tests pin the
+# key binding, then fire the shortcut directly instead of sending a keystroke. ---
+
+
+def test_delete_shortcut_is_scoped_to_table() -> None:
+    dialog = FailedDownloadsDialog([_record()])
+    shortcut = dialog._delete_shortcut
+    assert shortcut.key() == QKeySequence(QKeySequence.StandardKey.Delete)
+    assert shortcut.context() == Qt.ShortcutContext.WidgetShortcut
+    assert shortcut.parent() is dialog._table
+
+
+def test_delete_key_on_single_row_emits_without_prompt() -> None:
+    dialog = FailedDownloadsDialog([_record(key="a"), _record(key="b")])
+    dialog._table.selectRow(0)
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    with patch(_QUESTION) as question:
+        dialog._delete_shortcut.activated.emit()
+
+    question.assert_not_called()
+    assert captured == [["a"]]
+
+
+def test_delete_key_on_multi_row_goes_through_confirmation() -> None:
+    dialog = FailedDownloadsDialog([_record(key="a"), _record(key="b")])
+    dialog._table.selectAll()
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    with patch(_QUESTION, return_value=QMessageBox.StandardButton.No) as question:
+        dialog._delete_shortcut.activated.emit()
+
+    question.assert_called_once()
+    assert captured == []
+
+
+def test_delete_key_with_no_selection_is_a_no_op() -> None:
+    dialog = FailedDownloadsDialog([_record(key="a")])
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    with patch(_QUESTION) as question:
+        dialog._delete_shortcut.activated.emit()
+
+    question.assert_not_called()
+    assert captured == []
+
+
+def test_refresh_while_prompt_open_emits_the_confirmed_keys() -> None:
+    # The user confirmed "Delete 2": a refresh that drops "b" and inserts a new row
+    # at the top while the prompt is open must not change what gets emitted.
+    dialog = FailedDownloadsDialog([_record(key="a"), _record(key="b")])
+    dialog._table.selectAll()
+    captured: list[list[str]] = []
+    dialog.delete_requested.connect(captured.append)
+
+    def refresh_then_yes(*_args: object) -> QMessageBox.StandardButton:
+        dialog.set_records([_record(key="new"), _record(key="a")])
+        return QMessageBox.StandardButton.Yes
+
+    with patch(_QUESTION, side_effect=refresh_then_yes):
+        dialog._delete_btn.click()
+
+    assert captured == [["a", "b"]]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.NoButton,
+        QMessageBox.StandardButton.Cancel,
+    ],
+)
+def test_multi_row_actions_emit_nothing_unless_reply_is_yes(
+    reply: QMessageBox.StandardButton,
+) -> None:
+    dialog = FailedDownloadsDialog(
+        [_record(key="a", urls=[_YT + "aaa111"]), _record(key="b", urls=[_YT + "bbb222"])]
+    )
+    dialog._table.selectAll()
+    deleted: list[list[str]] = []
+    marked: list[list[dict]] = []
+    dialog.delete_requested.connect(deleted.append)
+    dialog.mark_downloaded_requested.connect(marked.append)
+
+    with patch(_QUESTION, return_value=reply):
+        dialog._delete_btn.click()
+        dialog._mark_downloaded_btn.click()
+
+    assert deleted == []
+    assert marked == []

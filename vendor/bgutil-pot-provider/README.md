@@ -20,6 +20,31 @@ uv run python scripts/setup_pot_provider.py
 once after `uv sync` to populate `server/node_modules/` via `deno install`. `src/config.py`
 points `POT_PROVIDER_SERVER_HOME` here (dev) or at the bundled `bgutil-server` dir (frozen).
 
+## Local changes on top of upstream
+
+The vendored copy is **not** byte-identical to the tag. Upstream had no patched release, so the
+locks were bumped here (2026-11-28, backlog #29, osv-scanner):
+
+- `package.json` `overrides.basic-ftp` 6.2.1 → 6.2.4 (also mirrored in `deno.lock`'s `workspace`
+  block).
+- Transitive patch bumps in **both** `package-lock.json` and `deno.lock`: `body-parser` 2.4.0,
+  `follow-redirects` 1.16.3, `undici` 7.30.2, `qs` 6.17.1, `ip-address` 10.7.7, `basic-ftp` 6.2.4.
+- Not fixed: `minimatch` 10.2.6 (GHSA-g3hv-75wg-m249). The fix is 11.x, outside eslint's `^10`
+  range. eslint is a dev dependency the app never runs, so the advisory cannot be reached.
+
+`deno.lock` is the one that matters at runtime: `setup_pot_provider.py` runs
+`deno install --frozen`, which never reads `package-lock.json`. Scanners read `package-lock.json`,
+so keep the two in step. Recipe: change `package.json`, then run
+`npm install --package-lock-only --ignore-scripts` and
+`npm update <pkgs> --package-lock-only --ignore-scripts`. Copy each bumped version's key and
+`integrity` into `deno.lock`. Deno refers to a single-version package by bare name, so only the
+entry key changes. A clean `deno install --frozen` (rc 0, lock left unchanged) proves the edit is
+consistent.
+
+On the next tag bump (below), replacing `server/` drops these changes. Re-scan with
+`osv-scanner scan source --lockfile server/package-lock.json` and reapply only what is still
+flagged.
+
 ## Updating the pin
 
 `tests/test_pot_provider_pin.py` fails when the plugin, this directory, the pin above, or the

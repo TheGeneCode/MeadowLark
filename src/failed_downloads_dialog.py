@@ -6,12 +6,14 @@ from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from PyQt6.QtCore import QItemSelection, QItemSelectionModel, QPoint, Qt, pyqtSignal
+from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMenu,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -66,6 +68,27 @@ def _skip_tooltip(count: int, selected: int, reason: str) -> str:
     return ""
 
 
+def _confirm_irreversible(parent: QWidget, title: str, question: str, count: int) -> bool:
+    """
+    Ask before an undo-free action that covers more than one record.
+
+    A single-row click stays frictionless - its blast radius is one record. Past
+    that, one click (or Ctrl+A then Delete) can wipe the whole list in a single
+    store write, so the user confirms the count first. No is the default button
+    so a stray Enter cancels.
+    """
+    if count <= 1:
+        return True
+    reply = QMessageBox.question(
+        parent,
+        title,
+        f"{question}\n\nThis cannot be undone.",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    return reply == QMessageBox.StandardButton.Yes
+
+
 class FailedDownloadsDialog(QDialog):
     """
     Non-blocking dialog listing failed downloads.
@@ -109,6 +132,13 @@ class FailedDownloadsDialog(QDialog):
         table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         table.customContextMenuRequested.connect(self._show_context_menu)
         table.itemSelectionChanged.connect(self._on_selection_changed)
+
+        # The Delete key routes through the same slot as the button, so it gets
+        # the same multi-row confirmation. WidgetShortcut: only while the table
+        # has focus, never stealing the key from another widget.
+        self._delete_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Delete), table)
+        self._delete_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        self._delete_shortcut.activated.connect(self._delete_selected)
 
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -262,13 +292,26 @@ class FailedDownloadsDialog(QDialog):
             self.retry_requested.emit(records)
 
     def _mark_downloaded_selected(self) -> None:
+        # Targets are captured before the prompt: a refresh while it is open
+        # (a new failure arriving) must not change what the user confirmed.
         records = self._targets().mark_downloaded
-        if records:
+        if records and _confirm_irreversible(
+            self,
+            "Mark as Downloaded",
+            f"Mark {len(records)} videos as downloaded? They are added to the download "
+            "archive, so future playlist scans will never retry them.",
+            len(records),
+        ):
             self.mark_downloaded_requested.emit(records)
 
     def _delete_selected(self) -> None:
         keys = self._targets().delete_keys
-        if keys:
+        if keys and _confirm_irreversible(
+            self,
+            "Delete Failed Downloads",
+            f"Delete {len(keys)} failed downloads?",
+            len(keys),
+        ):
             self.delete_requested.emit(keys)
 
     @staticmethod
